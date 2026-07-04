@@ -1,0 +1,136 @@
+import { FormEvent, useEffect, useState } from 'react'
+import { Plus } from 'lucide-react'
+import api from '../lib/api'
+import { useI18n } from '../context/LocaleContext'
+import type { FabricType } from '../types'
+import Card from '../components/ui/Card'
+import PageHeader from '../components/ui/PageHeader'
+
+export default function FabricTypesPage() {
+  const { t } = useI18n()
+  const [types, setTypes] = useState<FabricType[]>([])
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState({
+    name: '',
+    composition: '',
+    default_width_cm: '150',
+    default_gsm: '150',
+    parent_id: '',
+  })
+
+  async function load() {
+    const { data } = await api.get<FabricType[]>('/fabric-types')
+    setTypes(data)
+  }
+
+  useEffect(() => {
+    load()
+  }, [])
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    await api.post('/fabric-types', {
+      name: form.name,
+      composition: form.composition || null,
+      default_width_cm: form.default_width_cm ? Number(form.default_width_cm) : null,
+      default_gsm: form.default_gsm ? Number(form.default_gsm) : null,
+      parent_id: form.parent_id ? Number(form.parent_id) : null,
+    })
+    setShowForm(false)
+    setForm({ name: '', composition: '', default_width_cm: '150', default_gsm: '150', parent_id: '' })
+    load()
+  }
+
+  return (
+    <div>
+      <PageHeader
+        title={t.fabricTypes.title}
+        description={t.fabricTypes.description}
+        action={
+          <button
+            type="button"
+            onClick={() => setShowForm(!showForm)}
+            className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-teal-500 px-4 py-2 text-sm font-semibold text-white"
+          >
+            <Plus size={16} />
+            {t.fabricTypes.new}
+          </button>
+        }
+      />
+
+      {showForm && (
+        <Card className="mb-6">
+          <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
+            <input
+              placeholder={t.fabricTypes.typeName}
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="rounded-xl border border-border px-4 py-3"
+              required
+            />
+            <select
+              value={form.parent_id}
+              onChange={(e) => setForm({ ...form, parent_id: e.target.value })}
+              className="rounded-xl border border-border px-4 py-3"
+            >
+              <option value="">{t.fabricTypes.noParent}</option>
+              {types.map((type) => (
+                <option key={type.id} value={type.id}>
+                  {type.name}
+                </option>
+              ))}
+            </select>
+            <input
+              placeholder={t.fabricTypes.composition}
+              value={form.composition}
+              onChange={(e) => setForm({ ...form, composition: e.target.value })}
+              className="rounded-xl border border-border px-4 py-3"
+            />
+            <input
+              placeholder={t.fabricTypes.defaultWidth}
+              value={form.default_width_cm}
+              onChange={(e) => setForm({ ...form, default_width_cm: e.target.value })}
+              className="rounded-xl border border-border px-4 py-3"
+            />
+            <input
+              placeholder={t.fabricTypes.defaultGsm}
+              value={form.default_gsm}
+              onChange={(e) => setForm({ ...form, default_gsm: e.target.value })}
+              className="rounded-xl border border-border px-4 py-3"
+            />
+            <button type="submit" className="cursor-pointer rounded-xl bg-navy-900 px-4 py-3 font-semibold text-white md:col-span-2">
+              {t.fabricTypes.save}
+            </button>
+          </form>
+        </Card>
+      )}
+
+      <Card>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="border-b border-border text-muted">
+              <tr>
+                <th className="px-3 py-3">{t.common.name}</th>
+                <th className="px-3 py-3">{t.fabricTypes.parent}</th>
+                <th className="px-3 py-3">{t.fabricTypes.composition}</th>
+                <th className="px-3 py-3">{t.fabricTypes.width}</th>
+                <th className="px-3 py-3">{t.fabricTypes.gsm}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {types.map((type) => (
+                <tr key={type.id} className="border-b border-border/70">
+                  <td className="px-3 py-3 font-medium">{type.name}</td>
+                  <td className="px-3 py-3">{type.parent?.name ?? t.common.dash}</td>
+                  <td className="px-3 py-3">{type.composition ?? t.common.dash}</td>
+                  <td className="px-3 py-3">{type.default_width_cm ? `${type.default_width_cm} cm` : t.common.dash}</td>
+                  <td className="px-3 py-3">{type.default_gsm ?? t.common.dash}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  )
+}

@@ -1,0 +1,12 @@
+.DS_Store
+Thumbs.db
+*.log
+.env
+.env.local
+.env.production
+.idea/
+.vscode/
+*.swp
+
+# Cursor / local assets (generated screenshots)
+assets/

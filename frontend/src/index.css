@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-arabic: "Noto Sans Arabic", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --color-navy-900: #0c2340;
+  --color-navy-800: #132f52;
+  --color-navy-700: #1a3d66;
+  --color-teal-600: #1f7a6f;
+  --color-teal-500: #2a9d8f;
+  --color-mint-400: #52b788;
+  --color-gold-500: #c9a227;
+  --color-surface: #f4f7fb;
+  --color-card: #ffffff;
+  --color-border: #e2e8f0;
+  --color-muted: #64748b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font-sans);
+  background: var(--color-surface);
+  color: var(--color-navy-900);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+[dir='rtl'] body {
+  font-family: var(--font-arabic);
+}
+
+[dir='rtl'] input,
+[dir='rtl'] select,
+[dir='rtl'] textarea,
+[dir='rtl'] button {
+  font-family: inherit;
+}
