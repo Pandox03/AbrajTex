@@ -88,7 +88,10 @@
             border: 1px solid #000;
         }
         table.invoice-table th {
-            border: 1px solid #000;
+            border-top: 1px solid #000;
+            border-bottom: 1px solid #000;
+            border-left: none;
+            border-right: none;
             padding: 6px 5px;
             font-size: 10px;
             font-weight: bold;
@@ -100,7 +103,10 @@
             padding-left: 8px;
         }
         table.invoice-table td {
-            border: 1px solid #000;
+            border-top: 1px solid #000;
+            border-bottom: 1px solid #000;
+            border-left: none;
+            border-right: none;
             padding: 5px 6px;
             font-size: 11px;
             vertical-align: top;

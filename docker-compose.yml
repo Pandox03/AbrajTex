@@ -19,5 +19,20 @@ services:
       retries: 10
       start_period: 20s
 
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: abrajetex-phpmyadmin
+    restart: unless-stopped
+    ports:
+      - "${PHPMYADMIN_PORT:-8080}:80"
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootsecret}
+      UPLOAD_LIMIT: 256M
+    depends_on:
+      mysql:
+        condition: service_healthy
+
 volumes:
   mysql_data:

@@ -19,11 +19,34 @@ Full-stack inventory and sales management for **ABRAJE TEX**, a textile import w
 
 ## Local development
 
-### 1. MySQL (Docker)
+### 1. MySQL + phpMyAdmin (Docker)
 
 ```bash
 docker compose --env-file .env.docker up -d
 ```
+
+- **MySQL:** `localhost:3306`
+- **phpMyAdmin:** http://localhost:8080
+
+Log in to phpMyAdmin with:
+
+| Field | Value |
+|-------|-------|
+| Server | `mysql` (auto-filled) |
+| User | `root` |
+| Password | `rootsecret` (from `.env.docker`) |
+
+Or use the app user: `abrajetex` / `secret`.
+
+**Export SQL (create tables dump):**
+
+1. Open http://localhost:8080
+2. Select the `abrajetex` database in the left sidebar
+3. Click **Export**
+4. Choose **Quick** (structure + data) or **Custom** → check **Structure** only if you only want `CREATE TABLE` statements
+5. Format: **SQL** → **Export**
+
+You can import that `.sql` file on another server via phpMyAdmin **Import** or `mysql < dump.sql`.
 
 ### 2. Backend
 
