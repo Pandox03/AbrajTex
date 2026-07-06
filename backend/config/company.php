@@ -12,7 +12,7 @@ return [
     'activity' => 'IMPORTATION DE TOUTE SORTE DE TISSUS',
     'capital' => '100 000,00 MAD',
     'phone' => '',
-    'email' => '',
+    'email' => env('COMPANY_EMAIL', 'admin@abrajtex.com'),
     'if' => env('COMPANY_IF', ''),
     'tp' => env('COMPANY_TP', ''),
     'cnss' => env('COMPANY_CNSS', ''),

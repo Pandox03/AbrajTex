@@ -15,8 +15,6 @@ export default function ContainerDetailPage() {
   const [error, setError] = useState('')
   const [form, setForm] = useState({
     fabric_type_id: '',
-    color_code: '',
-    color_name: '',
     quantity_m2: '',
     estimated_rolls: '',
   })
@@ -40,15 +38,12 @@ export default function ContainerDetailPage() {
 
     try {
       await api.post(`/containers/${id}/items`, {
-        ...form,
         fabric_type_id: Number(form.fabric_type_id),
-        color_code: form.color_code.trim(),
-        color_name: form.color_name.trim() || null,
         quantity_m2: Number(form.quantity_m2),
         estimated_rolls: form.estimated_rolls ? Number(form.estimated_rolls) : null,
       })
       setShowForm(false)
-      setForm({ fabric_type_id: '', color_code: '', color_name: '', quantity_m2: '', estimated_rolls: '' })
+      setForm({ fabric_type_id: '', quantity_m2: '', estimated_rolls: '' })
       load()
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
@@ -88,7 +83,7 @@ export default function ContainerDetailPage() {
       )}
 
       <p className="mb-4 text-sm text-muted">
-        Les quantités ci-dessous alimentent le stock global par type de tissu et couleur.
+        Les quantités ci-dessous alimentent le stock global par type de tissu.
       </p>
 
       <div className="mb-6 flex justify-end">
@@ -98,7 +93,7 @@ export default function ContainerDetailPage() {
           className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-teal-500 px-4 py-2 text-sm font-semibold text-white"
         >
           <Plus size={16} />
-          {t.containers.addTypeColor}
+          {t.containers.addStockLine}
         </button>
       </div>
 
@@ -118,19 +113,6 @@ export default function ContainerDetailPage() {
                 </option>
               ))}
             </select>
-            <input
-              placeholder={t.containers.colorCode}
-              value={form.color_code}
-              onChange={(e) => setForm({ ...form, color_code: e.target.value })}
-              className="rounded-xl border border-border px-4 py-3"
-              required
-            />
-            <input
-              placeholder={t.containers.colorName}
-              value={form.color_name}
-              onChange={(e) => setForm({ ...form, color_name: e.target.value })}
-              className="rounded-xl border border-border px-4 py-3"
-            />
             <input
               placeholder={t.containers.quantityM2}
               type="number"
@@ -164,7 +146,6 @@ export default function ContainerDetailPage() {
             <thead className="border-b border-border text-muted">
               <tr>
                 <th className="px-3 py-3">{t.containers.type}</th>
-                <th className="px-3 py-3">{t.containers.color}</th>
                 <th className="px-3 py-3">{t.containers.arrivedM2}</th>
                 <th className="px-3 py-3">{t.containers.estRolls}</th>
               </tr>
@@ -172,16 +153,12 @@ export default function ContainerDetailPage() {
             <tbody>
               {(!container.items || container.items.length === 0) && (
                 <tr>
-                  <td colSpan={4} className="px-3 py-8 text-center text-muted">{t.containers.noStockLines}</td>
+                  <td colSpan={3} className="px-3 py-8 text-center text-muted">{t.containers.noStockLines}</td>
                 </tr>
               )}
               {container.items?.map((item) => (
                 <tr key={item.id} className="border-b border-border/70">
                   <td className="px-3 py-3 font-medium">{item.fabric_type?.name}</td>
-                  <td className="px-3 py-3">
-                    {item.color_code}
-                    {item.color_name ? ` · ${item.color_name}` : ''}
-                  </td>
                   <td className="px-3 py-3">{Number(item.quantity_m2).toLocaleString('fr-FR')}</td>
                   <td className="px-3 py-3">{item.estimated_rolls ?? t.common.dash}</td>
                 </tr>

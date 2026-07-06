@@ -28,6 +28,8 @@ export const ar = {
     clients: 'العملاء',
     users: 'المستخدمون',
     logs: 'السجل',
+    menu: 'القائمة',
+    closeMenu: 'إغلاق القائمة',
   },
   auth: {
     email: 'البريد الإلكتروني',

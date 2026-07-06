@@ -88,9 +88,9 @@
             border: 1px solid #000;
         }
         table.invoice-table th {
-            border-top: 1px solid #000;
-            border-bottom: 1px solid #000;
-            border-left: none;
+            border-top: none;
+            border-bottom: none;
+            border-left: 1px solid #000;
             border-right: none;
             padding: 6px 5px;
             font-size: 10px;
@@ -98,18 +98,24 @@
             text-transform: uppercase;
             text-align: center;
         }
+        table.invoice-table th:first-child {
+            border-left: none;
+        }
         table.invoice-table th.col-designation {
             text-align: left;
             padding-left: 8px;
         }
         table.invoice-table td {
-            border-top: 1px solid #000;
-            border-bottom: 1px solid #000;
-            border-left: none;
+            border-top: none;
+            border-bottom: none;
+            border-left: 1px solid #000;
             border-right: none;
             padding: 5px 6px;
             font-size: 11px;
             vertical-align: top;
+        }
+        table.invoice-table td:first-child {
+            border-left: none;
         }
         table.invoice-table td.center { text-align: center; }
         table.invoice-table td.right { text-align: right; white-space: nowrap; }
@@ -122,6 +128,12 @@
         table.invoice-table tfoot td {
             font-size: 11px;
             vertical-align: middle;
+            border-top: 1px solid #000;
+            border-bottom: 1px solid #000;
+        }
+        table.invoice-table tbody td {
+            border-top: none;
+            border-bottom: none;
         }
         .amount-words-cell {
             padding: 10px 8px !important;
@@ -176,6 +188,7 @@
     $footerParts = array_filter([
         $company['address'].' - '.strtoupper($company['city']),
         ! empty($company['phone']) ? 'Tél: '.$company['phone'] : null,
+        ! empty($company['email']) ? 'Email: '.$company['email'] : null,
         'ICE: '.$company['ice'],
         'RC: '.$company['rc'].' ('.$company['rc_city'].')',
         ! empty($company['capital']) ? 'Capital: '.$company['capital'] : null,
@@ -198,6 +211,9 @@
             <img src="{{ $headerLogo }}" alt="{{ $company['name'] }}">
         @endif
         <div class="brand-name">{{ $company['name'] }} {{ $company['legal_form'] }}</div>
+        @if(! empty($company['email']))
+            <div style="margin-top: 2px; font-size: 10px;">{{ $company['email'] }}</div>
+        @endif
     </div>
 
     <table class="info-boxes">

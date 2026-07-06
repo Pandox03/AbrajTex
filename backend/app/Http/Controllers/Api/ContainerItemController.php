@@ -17,14 +17,14 @@ class ContainerItemController extends Controller
     {
         $data = $request->validate([
             'fabric_type_id' => ['required', 'exists:fabric_types,id'],
-            'color_code' => ['required', 'string', 'max:50'],
+            'color_code' => ['nullable', 'string', 'max:50'],
             'color_name' => ['nullable', 'string', 'max:100'],
             'quantity_m2' => ['required', 'numeric', 'min:0.01'],
             'estimated_rolls' => ['nullable', 'integer', 'min:0'],
             'notes' => ['nullable', 'string'],
         ]);
 
-        $colorCode = trim($data['color_code']);
+        $colorCode = trim($data['color_code'] ?? '') ?: '-';
 
         $duplicate = $container->items()
             ->where('fabric_type_id', $data['fabric_type_id'])
@@ -33,13 +33,14 @@ class ContainerItemController extends Controller
 
         if ($duplicate) {
             return response()->json([
-                'message' => 'Une ligne stock existe déjà pour ce type de tissu et cette couleur sur ce conteneur.',
+                'message' => 'Une ligne stock existe déjà pour ce type de tissu sur ce conteneur.',
             ], 422);
         }
 
         $item = $container->items()->create([
             ...$data,
             'color_code' => $colorCode,
+            'color_name' => $data['color_name'] ?? null,
         ]);
         $item->load('fabricType');
 

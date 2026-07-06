@@ -1,13 +1,22 @@
+DirectoryIndex index.html
+
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
-    # Serve files from Laravel public (React build + API)
-    RewriteCond %{DOCUMENT_ROOT}/../abrajtex/backend/public%{REQUEST_URI} -f [OR]
-    RewriteCond %{DOCUMENT_ROOT}/../abrajtex/backend/public%{REQUEST_URI} -d
-    RewriteRule ^(.*)$ ../abrajtex/backend/public/$1 [L]
+    RewriteCond %{HTTP:x-xsrf-token} .
+    RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
 
-    RewriteRule ^(.*)$ ../abrajtex/backend/public/$1 [L]
+    RewriteCond %{REQUEST_URI} ^/api
+    RewriteRule ^ api.php [L]
+
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteRule ^ - [L]
+
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    RewriteRule ^ index.html [L]
 </IfModule>

@@ -17,16 +17,12 @@ const statusColors: Record<Container['status'], string> = {
 
 interface StockLine {
   fabric_type_id: string
-  color_code: string
-  color_name: string
   quantity_m2: string
   estimated_rolls: string
 }
 
 const emptyStockLine = (): StockLine => ({
   fabric_type_id: '',
-  color_code: '',
-  color_name: '',
   quantity_m2: '',
   estimated_rolls: '',
 })
@@ -79,8 +75,6 @@ export default function ContainersPage() {
         status: 'arrived',
         items: stockLines.map((line) => ({
           fabric_type_id: Number(line.fabric_type_id),
-          color_code: line.color_code.trim(),
-          color_name: line.color_name.trim() || null,
           quantity_m2: Number(line.quantity_m2),
           estimated_rolls: line.estimated_rolls ? Number(line.estimated_rolls) : null,
         })),
@@ -202,11 +196,11 @@ export default function ContainersPage() {
                       </button>
                     )}
                   </div>
-                  <div className="grid gap-3 md:grid-cols-3">
+                  <div className="grid gap-3 md:grid-cols-2">
                     <select
                       value={line.fabric_type_id}
                       onChange={(e) => updateStockLine(index, 'fabric_type_id', e.target.value)}
-                      className="rounded-xl border border-border px-3 py-2.5 text-sm md:col-span-3"
+                      className="rounded-xl border border-border px-3 py-2.5 text-sm md:col-span-2"
                       required
                     >
                       <option value="">{t.containers.selectType}</option>
@@ -214,19 +208,6 @@ export default function ContainersPage() {
                         <option key={type.id} value={type.id}>{type.name}</option>
                       ))}
                     </select>
-                    <input
-                      placeholder={t.containers.colorCode}
-                      value={line.color_code}
-                      onChange={(e) => updateStockLine(index, 'color_code', e.target.value)}
-                      className="rounded-xl border border-border px-3 py-2.5 text-sm"
-                      required
-                    />
-                    <input
-                      placeholder={t.containers.colorName}
-                      value={line.color_name}
-                      onChange={(e) => updateStockLine(index, 'color_name', e.target.value)}
-                      className="rounded-xl border border-border px-3 py-2.5 text-sm"
-                    />
                     <input
                       placeholder={t.containers.quantityM2}
                       type="number"
@@ -243,7 +224,7 @@ export default function ContainersPage() {
                       min="0"
                       value={line.estimated_rolls}
                       onChange={(e) => updateStockLine(index, 'estimated_rolls', e.target.value)}
-                      className="rounded-xl border border-border px-3 py-2.5 text-sm md:col-span-2"
+                      className="rounded-xl border border-border px-3 py-2.5 text-sm"
                     />
                   </div>
                 </div>

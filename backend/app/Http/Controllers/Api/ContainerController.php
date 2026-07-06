@@ -72,7 +72,7 @@ class ContainerController extends Controller
             'notes' => ['nullable', 'string'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.fabric_type_id' => ['required', 'exists:fabric_types,id'],
-            'items.*.color_code' => ['required', 'string', 'max:50'],
+            'items.*.color_code' => ['nullable', 'string', 'max:50'],
             'items.*.color_name' => ['nullable', 'string', 'max:100'],
             'items.*.quantity_m2' => ['required', 'numeric', 'min:0.01'],
             'items.*.estimated_rolls' => ['nullable', 'integer', 'min:0'],
@@ -92,12 +92,12 @@ class ContainerController extends Controller
                 $seen = [];
 
                 foreach ($items as $itemData) {
-                    $colorCode = trim($itemData['color_code']);
+                    $colorCode = trim($itemData['color_code'] ?? '') ?: '-';
                     $key = $itemData['fabric_type_id'].'|'.$colorCode;
 
                     if (isset($seen[$key])) {
                         throw new InvalidArgumentException(
-                            'Doublon dans le stock : même type de tissu et même couleur saisis deux fois.'
+                            'Doublon dans le stock : même type de tissu saisi deux fois.'
                         );
                     }
 
@@ -106,6 +106,7 @@ class ContainerController extends Controller
                     $container->items()->create([
                         ...$itemData,
                         'color_code' => $colorCode,
+                        'color_name' => $itemData['color_name'] ?? null,
                     ]);
                 }
 

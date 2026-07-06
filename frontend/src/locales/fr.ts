@@ -28,6 +28,8 @@ export const fr = {
     clients: 'Clients',
     users: 'Utilisateurs',
     logs: 'Journal',
+    menu: 'Menu',
+    closeMenu: 'Fermer le menu',
   },
   auth: {
     email: 'E-mail',
