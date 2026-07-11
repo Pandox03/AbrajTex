@@ -14,7 +14,8 @@ type Tab = 'orders' | 'payments' | 'invoices'
 
 export default function ClientDetailPage() {
   const { id } = useParams()
-  const { isAdmin } = useAuth()
+  const { isAdmin, isSecretaire } = useAuth()
+  const canRecordPayment = isAdmin || isSecretaire
   const { t } = useI18n()
   const [profile, setProfile] = useState<ClientProfile | null>(null)
   const [tab, setTab] = useState<Tab>('orders')
@@ -185,7 +186,7 @@ export default function ClientDetailPage() {
             </button>
           ))}
         </div>
-        {isAdmin && (
+        {canRecordPayment && (
           <button
             type="button"
             onClick={() => setShowPaymentForm(!showPaymentForm)}
@@ -197,7 +198,7 @@ export default function ClientDetailPage() {
         )}
       </div>
 
-      {isAdmin && showPaymentForm && (
+      {canRecordPayment && showPaymentForm && (
         <Card className="mb-6">
           <form onSubmit={handlePayment} className="space-y-4">
             <InvoicePicker

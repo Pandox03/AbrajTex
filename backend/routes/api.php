@@ -30,6 +30,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/comptable/dashboard', [ComptableController::class, 'dashboard']);
 
         Route::get('payments', [PaymentController::class, 'index']);
+    });
+
+    Route::middleware('role:admin,comptable,secretaire')->group(function () {
         Route::get('payments/{payment}/proof', [PaymentController::class, 'proof']);
     });
 
@@ -75,6 +78,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('stock', [StockController::class, 'index']);
         Route::get('stock/rolls', [StockController::class, 'rolls']);
+
+        Route::post('payments', [PaymentController::class, 'store']);
     });
 
     // Admin only
@@ -86,8 +91,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('clients/{client}', [ClientController::class, 'destroy']);
 
         Route::get('fabric-rolls', [FabricRollController::class, 'index']);
-
-        Route::post('payments', [PaymentController::class, 'store']);
 
         Route::get('users', [UserController::class, 'index']);
         Route::post('users', [UserController::class, 'store']);
