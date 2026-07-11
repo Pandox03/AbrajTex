@@ -109,18 +109,23 @@ export interface Client {
 export interface SaleItem {
   id: number
   sale_id: number
-  fabric_roll_id: number
+  fabric_roll_id?: number | null
+  fabric_type_id?: number | null
   unit_price: string | number
   quantity_m2: string | number
   line_total: string | number
   fabric_roll?: FabricRoll
+  fabric_type?: FabricType
 }
+
+export type SaleType = 'stock' | 'legacy_credit'
 
 export type PaymentStatus = 'unpaid' | 'partial' | 'paid'
 
 export interface Sale {
   id: number
   reference: string
+  sale_type?: SaleType
   client_id: number
   sale_date: string
   total_amount: string | number

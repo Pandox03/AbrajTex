@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FilePlus, Layers, Package, Palette, ShoppingCart, Users } from 'lucide-react'
+import { FilePlus, Layers, Package, Palette, Receipt, ShoppingCart, Users } from 'lucide-react'
 import api from '../lib/api'
 import { useI18n } from '../context/LocaleContext'
 import type { Client, Container, Sale } from '../types'
@@ -68,6 +68,13 @@ export default function SecretairePage() {
       title: t.nav.stock,
       desc: t.secretaire.viewStockDesc,
       color: 'bg-emerald-600',
+    },
+    {
+      to: '/credits/new',
+      icon: Receipt,
+      title: t.nav.credits,
+      desc: t.credit.description,
+      color: 'bg-amber-500',
     },
     {
       to: '/invoices/generer',

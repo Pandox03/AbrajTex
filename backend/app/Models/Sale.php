@@ -11,6 +11,7 @@ class Sale extends Model
 {
     protected $fillable = [
         'reference',
+        'sale_type',
         'client_id',
         'sale_date',
         'total_amount',

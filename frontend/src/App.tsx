@@ -12,6 +12,7 @@ import InvoicesPage from './pages/InvoicesPage'
 import LoginPage from './pages/LoginPage'
 import LogsPage from './pages/LogsPage'
 import NewSalePage from './pages/NewSalePage'
+import NewCreditPage from './pages/NewCreditPage'
 import PaymentsPage from './pages/PaymentsPage'
 import SalesPage from './pages/SalesPage'
 import StockPage from './pages/StockPage'
@@ -44,6 +45,7 @@ export default function App() {
           <Route path="/invoices/generer" element={<GenerateInvoicePage />} />
           <Route path="/sales" element={<SalesPage />} />
           <Route path="/sales/new" element={<NewSalePage />} />
+          <Route path="/credits/new" element={<NewCreditPage />} />
           <Route path="/stock" element={<StockPage />} />
           <Route path="/fabric-types" element={<FabricTypesPage />} />
         </Route>

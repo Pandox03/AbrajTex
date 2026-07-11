@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Package,
   Palette,
+  Receipt,
   ShoppingCart,
   Users,
 } from 'lucide-react'
@@ -28,6 +29,7 @@ export default function SecretaireSidebar({ mobileOpen, onClose }: SecretaireSid
     { to: '/fabric-types', label: t.nav.fabricTypes, icon: Palette },
     { to: '/clients', label: t.nav.clients, icon: Users },
     { to: '/sales', label: t.nav.sales, icon: ShoppingCart },
+    { to: '/credits/new', label: t.nav.credits, icon: Receipt },
     { to: '/stock', label: t.nav.stock, icon: Layers },
     { to: '/invoices', label: t.nav.invoices, icon: FileText },
     { to: '/invoices/generer', label: t.secretaire.generateInvoice, icon: FilePlus },

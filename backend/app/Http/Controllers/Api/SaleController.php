@@ -25,7 +25,7 @@ class SaleController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $query = Sale::query()->with(['client', 'invoices', 'items']);
+        $query = Sale::query()->with(['client', 'invoices', 'items.fabricType', 'items.fabricRoll.fabricType']);
 
         if ($search = $request->string('search')->toString()) {
             $query->where(function ($q) use ($search) {
@@ -40,6 +40,10 @@ class SaleController extends Controller
 
         if ($paymentStatus = $request->string('payment_status')->toString()) {
             $query->where('payment_status', $paymentStatus);
+        }
+
+        if ($saleType = $request->string('sale_type')->toString()) {
+            $query->where('sale_type', $saleType);
         }
 
         if ($from = $request->string('date_from')->toString()) {
@@ -59,6 +63,7 @@ class SaleController extends Controller
             'client',
             'invoices.payments',
             'payments',
+            'items.fabricType',
             'items.fabricRoll.fabricType',
             'items.fabricRoll.container',
         ]);
@@ -69,6 +74,17 @@ class SaleController extends Controller
     }
 
     public function store(Request $request): JsonResponse
+    {
+        $saleType = $request->input('sale_type', 'stock');
+
+        if ($saleType === 'legacy_credit') {
+            return $this->storeLegacyCredit($request);
+        }
+
+        return $this->storeStockSale($request);
+    }
+
+    private function storeStockSale(Request $request): JsonResponse
     {
         $data = $request->validate([
             'reference' => ['required', 'string', 'max:100', 'unique:sales,reference'],
@@ -88,6 +104,7 @@ class SaleController extends Controller
 
                 $sale = Sale::create([
                     'reference' => $data['reference'],
+                    'sale_type' => 'stock',
                     'client_id' => $data['client_id'],
                     'sale_date' => $data['sale_date'],
                     'notes' => $data['notes'] ?? null,
@@ -100,7 +117,7 @@ class SaleController extends Controller
                 $total = 0;
                 $rollSequence = 0;
 
-                foreach ($data['lines'] as $lineIndex => $lineData) {
+                foreach ($data['lines'] as $lineData) {
                     $fabricType = FabricType::query()->findOrFail($lineData['fabric_type_id']);
                     $lineM2 = round((float) $lineData['quantity_m2'], 2);
                     $rollCount = (int) $lineData['roll_count'];
@@ -170,5 +187,70 @@ class SaleController extends Controller
         } catch (InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+    }
+
+    private function storeLegacyCredit(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'reference' => ['required', 'string', 'max:100', 'unique:sales,reference'],
+            'client_id' => ['required', 'exists:clients,id'],
+            'sale_date' => ['required', 'date'],
+            'notes' => ['nullable', 'string'],
+            'lines' => ['required', 'array', 'min:1'],
+            'lines.*.fabric_type_id' => ['required', 'exists:fabric_types,id'],
+            'lines.*.quantity_m2' => ['required', 'numeric', 'min:0.01'],
+            'lines.*.line_total' => ['required', 'numeric', 'min:0.01'],
+        ]);
+
+        $sale = DB::transaction(function () use ($data, $request) {
+            $sale = Sale::create([
+                'reference' => $data['reference'],
+                'sale_type' => 'legacy_credit',
+                'client_id' => $data['client_id'],
+                'sale_date' => $data['sale_date'],
+                'notes' => $data['notes'] ?? null,
+                'user_id' => $request->user()->id,
+                'total_amount' => 0,
+                'paid_amount' => 0,
+                'payment_status' => 'unpaid',
+            ]);
+
+            $total = 0;
+
+            foreach ($data['lines'] as $lineData) {
+                $quantityM2 = round((float) $lineData['quantity_m2'], 2);
+                $lineTotal = round((float) $lineData['line_total'], 2);
+                $unitPrice = round($lineTotal / $quantityM2, 4);
+
+                SaleItem::create([
+                    'sale_id' => $sale->id,
+                    'fabric_roll_id' => null,
+                    'fabric_type_id' => $lineData['fabric_type_id'],
+                    'unit_price' => $unitPrice,
+                    'quantity_m2' => $quantityM2,
+                    'line_total' => $lineTotal,
+                ]);
+
+                $total += $lineTotal;
+            }
+
+            $sale->update(['total_amount' => round($total, 2)]);
+
+            return $sale;
+        });
+
+        $sale->load(['client', 'items.fabricType', 'invoices']);
+
+        $this->logger->log(
+            $request->user(),
+            $request,
+            'created',
+            "Crédit historique enregistré — {$sale->reference}",
+            'sale',
+            $sale->id,
+            ['client' => $sale->client?->name, 'total' => $sale->total_amount, 'type' => 'legacy_credit'],
+        );
+
+        return response()->json($sale, 201);
     }
 }

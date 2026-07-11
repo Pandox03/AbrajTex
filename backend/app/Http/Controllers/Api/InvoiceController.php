@@ -101,7 +101,7 @@ class InvoiceController extends Controller
         }
         $invoice->save();
 
-        $invoice->load(['client', 'sale.items.fabricRoll.fabricType']);
+        $invoice->load(['client', 'sale.items.fabricType', 'sale.items.fabricRoll.fabricType']);
 
         $this->logger->log(
             $request->user(),
@@ -122,6 +122,7 @@ class InvoiceController extends Controller
     {
         $invoice->load([
             'client',
+            'sale.items.fabricType',
             'sale.items.fabricRoll.fabricType',
             'sale.items.fabricRoll.container',
             'payments',

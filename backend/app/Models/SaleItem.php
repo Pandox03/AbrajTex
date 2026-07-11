@@ -10,6 +10,7 @@ class SaleItem extends Model
     protected $fillable = [
         'sale_id',
         'fabric_roll_id',
+        'fabric_type_id',
         'unit_price',
         'quantity_m2',
         'line_total',
@@ -32,5 +33,10 @@ class SaleItem extends Model
     public function fabricRoll(): BelongsTo
     {
         return $this->belongsTo(FabricRoll::class);
+    }
+
+    public function fabricType(): BelongsTo
+    {
+        return $this->belongsTo(FabricType::class);
     }
 }

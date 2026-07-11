@@ -34,10 +34,16 @@ export default function SalesPage() {
         title={t.sales.title}
         description={t.sales.description}
         action={
-          <Link to="/sales/new" className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-teal-500 px-4 py-2 text-sm font-semibold text-white">
-            <Plus size={16} />
-            {t.sales.new}
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link to="/credits/new" className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-border bg-card px-4 py-2 text-sm font-semibold text-navy-900 hover:bg-surface">
+              <Plus size={16} />
+              {t.sales.newCredit}
+            </Link>
+            <Link to="/sales/new" className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-teal-500 px-4 py-2 text-sm font-semibold text-white">
+              <Plus size={16} />
+              {t.sales.new}
+            </Link>
+          </div>
         }
       />
 
@@ -88,7 +94,14 @@ export default function SalesPage() {
               )}
               {sales.map((sale) => (
                 <tr key={sale.id} className="border-b border-border/70">
-                  <td className="px-3 py-3 font-medium">{sale.reference}</td>
+                  <td className="px-3 py-3 font-medium">
+                    <span>{sale.reference}</span>
+                    {sale.sale_type === 'legacy_credit' && (
+                      <span className="ms-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                        {t.sales.legacyBadge}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 py-3">
                     <Link to={`/clients/${sale.client_id}`} className="text-teal-600 hover:underline">
                       {sale.client?.name}

@@ -18,6 +18,7 @@ class InvoicePdfService
     {
         $invoice->load([
             'client',
+            'sale.items.fabricType',
             'sale.items.fabricRoll.fabricType',
         ]);
 
@@ -64,9 +65,8 @@ class InvoicePdfService
         $groups = [];
 
         foreach ($invoice->sale->items as $item) {
-            $roll = $item->fabricRoll;
-            $typeId = (int) ($roll?->fabric_type_id ?? 0);
-            $fabric = $roll?->fabricType?->name ?? 'Tissu';
+            $typeId = (int) ($item->fabric_type_id ?? $item->fabricRoll?->fabric_type_id ?? 0);
+            $fabric = $item->fabricType?->name ?? $item->fabricRoll?->fabricType?->name ?? 'Tissu';
 
             if (! isset($groups[$typeId])) {
                 $groups[$typeId] = [
@@ -77,7 +77,9 @@ class InvoicePdfService
                 ];
             }
 
-            $groups[$typeId]['roll_count']++;
+            if ($item->fabric_roll_id) {
+                $groups[$typeId]['roll_count']++;
+            }
             $groups[$typeId]['quantity_m2'] += (float) $item->quantity_m2;
             $groups[$typeId]['line_total_ttc'] += (float) $item->line_total;
         }
