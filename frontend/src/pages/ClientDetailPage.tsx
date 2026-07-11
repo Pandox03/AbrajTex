@@ -1,10 +1,10 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Plus } from 'lucide-react'
+import { ArrowLeft, Pencil, Plus } from 'lucide-react'
 import api from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { useI18n } from '../context/LocaleContext'
-import type { ClientProfile, Invoice, InvoiceStatus, Payment, Sale } from '../types'
+import type { Client, ClientProfile, Invoice, InvoiceStatus, Payment, Sale } from '../types'
 import Card from '../components/ui/Card'
 import { InvoiceStatusSelect } from '../components/ui/InvoiceStatusSelect'
 import { InvoiceBadge, PaymentBadge } from '../components/ui/StatusBadge'
@@ -14,10 +14,12 @@ type Tab = 'orders' | 'payments' | 'invoices'
 export default function ClientDetailPage() {
   const { id } = useParams()
   const { isAdmin, isSecretaire } = useAuth()
+  const canEditClient = isAdmin || isSecretaire
   const canRecordPayment = isAdmin || isSecretaire
   const { t } = useI18n()
   const [profile, setProfile] = useState<ClientProfile | null>(null)
   const [tab, setTab] = useState<Tab>('orders')
+  const [showEditForm, setShowEditForm] = useState(false)
   const [showPaymentForm, setShowPaymentForm] = useState(false)
   const [updatingInvoiceId, setUpdatingInvoiceId] = useState<number | null>(null)
   const [paymentForm, setPaymentForm] = useState({
@@ -31,6 +33,21 @@ export default function ClientDetailPage() {
   const [proofFile, setProofFile] = useState<File | null>(null)
   const [paymentError, setPaymentError] = useState('')
   const [submittingPayment, setSubmittingPayment] = useState(false)
+  const [editForm, setEditForm] = useState({
+    name: '',
+    contact_person: '',
+    phone: '',
+    email: '',
+    address: '',
+    city: '',
+    category: '',
+    ice_number: '',
+    credit_limit: '',
+    payment_terms_days: '30',
+    notes: '',
+  })
+  const [editError, setEditError] = useState('')
+  const [submittingEdit, setSubmittingEdit] = useState(false)
 
   const load = useCallback(() => {
     api.get<ClientProfile>(`/clients/${id}`).then((res) => setProfile(res.data))
@@ -39,6 +56,55 @@ export default function ClientDetailPage() {
   useEffect(() => {
     load()
   }, [load])
+
+  function openEditForm(client: Client) {
+    setEditForm({
+      name: client.name ?? '',
+      contact_person: client.contact_person ?? '',
+      phone: client.phone ?? '',
+      email: client.email ?? '',
+      address: client.address ?? '',
+      city: client.city ?? '',
+      category: client.category ?? '',
+      ice_number: client.ice_number ?? '',
+      credit_limit: client.credit_limit != null ? String(client.credit_limit) : '',
+      payment_terms_days: String(client.payment_terms_days ?? 30),
+      notes: client.notes ?? '',
+    })
+    setEditError('')
+    setShowEditForm(true)
+  }
+
+  async function handleClientUpdate(e: FormEvent) {
+    e.preventDefault()
+    if (!profile) return
+
+    setEditError('')
+    setSubmittingEdit(true)
+
+    try {
+      const { data } = await api.put<Client>(`/clients/${profile.client.id}`, {
+        name: editForm.name,
+        contact_person: editForm.contact_person || null,
+        phone: editForm.phone || null,
+        email: editForm.email || null,
+        address: editForm.address || null,
+        city: editForm.city || null,
+        category: editForm.category || null,
+        ice_number: editForm.ice_number || null,
+        credit_limit: editForm.credit_limit ? Number(editForm.credit_limit) : null,
+        payment_terms_days: Number(editForm.payment_terms_days),
+        notes: editForm.notes || null,
+      })
+      setProfile((prev) => (prev ? { ...prev, client: { ...prev.client, ...data } } : prev))
+      setShowEditForm(false)
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      setEditError(msg ?? t.clients.updateError)
+    } finally {
+      setSubmittingEdit(false)
+    }
+  }
 
   async function handlePayment(e: FormEvent) {
     e.preventDefault()
@@ -132,8 +198,21 @@ export default function ClientDetailPage() {
 
       <div className="mb-6 grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <h1 className="text-2xl font-bold text-navy-900">{client.name}</h1>
-          <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <h1 className="text-2xl font-bold text-navy-900">{client.name}</h1>
+            {canEditClient && !showEditForm && (
+              <button
+                type="button"
+                onClick={() => openEditForm(client)}
+                className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm font-medium text-navy-800 hover:bg-surface"
+              >
+                <Pencil size={16} />
+                {t.clients.edit}
+              </button>
+            )}
+          </div>
+          {!showEditForm ? (
+          <div className="grid gap-2 text-sm sm:grid-cols-2">
             {client.contact_person && <p><span className="text-muted">{t.clients.contact} :</span> {client.contact_person}</p>}
             {client.phone && <p><span className="text-muted">{t.common.phone} :</span> {client.phone}</p>}
             {client.email && <p><span className="text-muted">{t.auth.email} :</span> {client.email}</p>}
@@ -143,7 +222,65 @@ export default function ClientDetailPage() {
             {client.address && <p className="sm:col-span-2"><span className="text-muted">{t.common.address} :</span> {client.address}</p>}
             {client.credit_limit && <p><span className="text-muted">{t.clients.creditLimit} :</span> {Number(client.credit_limit).toLocaleString('fr-FR')} MAD</p>}
             <p><span className="text-muted">{t.clients.paymentTerms} :</span> {client.payment_terms_days ?? 30} {t.clients.days}</p>
+            {client.notes && <p className="sm:col-span-2"><span className="text-muted">{t.common.notes} :</span> {client.notes}</p>}
           </div>
+          ) : (
+          <form onSubmit={handleClientUpdate} className="grid gap-4 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-sm font-medium">{t.common.name}</label>
+              <input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="w-full rounded-xl border border-border px-4 py-3" required />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">{t.clients.contact}</label>
+              <input value={editForm.contact_person} onChange={(e) => setEditForm({ ...editForm, contact_person: e.target.value })} className="w-full rounded-xl border border-border px-4 py-3" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">{t.common.phone}</label>
+              <input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} className="w-full rounded-xl border border-border px-4 py-3" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">{t.auth.email}</label>
+              <input type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} className="w-full rounded-xl border border-border px-4 py-3" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">{t.clients.ice}</label>
+              <input value={editForm.ice_number} onChange={(e) => setEditForm({ ...editForm, ice_number: e.target.value })} className="w-full rounded-xl border border-border px-4 py-3" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">{t.common.city}</label>
+              <input value={editForm.city} onChange={(e) => setEditForm({ ...editForm, city: e.target.value })} className="w-full rounded-xl border border-border px-4 py-3" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">{t.common.category}</label>
+              <input value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })} className="w-full rounded-xl border border-border px-4 py-3" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">{t.clients.creditLimit}</label>
+              <input type="number" min="0" value={editForm.credit_limit} onChange={(e) => setEditForm({ ...editForm, credit_limit: e.target.value })} className="w-full rounded-xl border border-border px-4 py-3" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">{t.clients.paymentTerms}</label>
+              <input type="number" min="0" max="365" value={editForm.payment_terms_days} onChange={(e) => setEditForm({ ...editForm, payment_terms_days: e.target.value })} className="w-full rounded-xl border border-border px-4 py-3" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-sm font-medium">{t.common.address}</label>
+              <input value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} className="w-full rounded-xl border border-border px-4 py-3" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-sm font-medium">{t.common.notes}</label>
+              <textarea value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} className="w-full rounded-xl border border-border px-4 py-3" rows={2} />
+            </div>
+            {editError && <p className="md:col-span-2 text-sm text-red-600">{editError}</p>}
+            <div className="flex flex-wrap gap-2 md:col-span-2">
+              <button type="submit" disabled={submittingEdit} className="cursor-pointer rounded-xl bg-teal-500 px-4 py-3 font-semibold text-white disabled:opacity-50">
+                {submittingEdit ? t.clients.saving : t.clients.saveChanges}
+              </button>
+              <button type="button" onClick={() => setShowEditForm(false)} className="cursor-pointer rounded-xl border border-border px-4 py-3 font-medium hover:bg-surface">
+                {t.common.cancel}
+              </button>
+            </div>
+          </form>
+          )}
         </Card>
 
         <div className="grid gap-4">

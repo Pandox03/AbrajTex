@@ -82,6 +82,7 @@ export const fr = {
     from: 'Du',
     to: 'Au',
     apply: 'Appliquer',
+    cancel: 'Annuler',
   },
   filters: {
     title: 'Filtres',
@@ -217,6 +218,10 @@ export const fr = {
     description: 'Clients grossistes — profils, commandes et paiements.',
     new: 'Nouveau client',
     save: 'Enregistrer le client',
+    edit: 'Modifier',
+    saveChanges: 'Enregistrer les modifications',
+    saving: 'Enregistrement...',
+    updateError: 'Impossible de mettre à jour le client.',
     ice: 'N° ICE',
     profile: 'Profil client',
     contact: 'Contact',

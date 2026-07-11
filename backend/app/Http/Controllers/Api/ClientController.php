@@ -162,6 +162,8 @@ class ClientController extends Controller
 
         $client->update($data);
 
+        Cache::forget('sale_form_options');
+
         $this->logger->log(
             $request->user(),
             $request,

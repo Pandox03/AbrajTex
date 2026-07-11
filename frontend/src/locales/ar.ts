@@ -82,6 +82,7 @@ export const ar = {
     from: 'من',
     to: 'إلى',
     apply: 'تطبيق',
+    cancel: 'إلغاء',
   },
   filters: {
     title: 'عوامل التصفية',
@@ -217,6 +218,10 @@ export const ar = {
     description: 'عملاء الجملة — الملفات والطلبات والمدفوعات.',
     new: 'عميل جديد',
     save: 'حفظ العميل',
+    edit: 'تعديل',
+    saveChanges: 'حفظ التعديلات',
+    saving: 'جارٍ الحفظ...',
+    updateError: 'تعذّر تحديث العميل.',
     ice: 'رقم ICE',
     profile: 'ملف العميل',
     contact: 'جهة الاتصال',
