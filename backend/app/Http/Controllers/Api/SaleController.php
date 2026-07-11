@@ -195,14 +195,13 @@ class SaleController extends Controller
             'reference' => ['required', 'string', 'max:100', 'unique:sales,reference'],
             'client_id' => ['required', 'exists:clients,id'],
             'sale_date' => ['required', 'date'],
+            'total_amount' => ['required', 'numeric', 'min:0.01'],
             'notes' => ['nullable', 'string'],
-            'lines' => ['required', 'array', 'min:1'],
-            'lines.*.fabric_type_id' => ['required', 'exists:fabric_types,id'],
-            'lines.*.quantity_m2' => ['required', 'numeric', 'min:0.01'],
-            'lines.*.line_total' => ['required', 'numeric', 'min:0.01'],
         ]);
 
-        $sale = DB::transaction(function () use ($data, $request) {
+        $totalAmount = round((float) $data['total_amount'], 2);
+
+        $sale = DB::transaction(function () use ($data, $request, $totalAmount) {
             $sale = Sale::create([
                 'reference' => $data['reference'],
                 'sale_type' => 'legacy_credit',
@@ -210,31 +209,19 @@ class SaleController extends Controller
                 'sale_date' => $data['sale_date'],
                 'notes' => $data['notes'] ?? null,
                 'user_id' => $request->user()->id,
-                'total_amount' => 0,
+                'total_amount' => $totalAmount,
                 'paid_amount' => 0,
                 'payment_status' => 'unpaid',
             ]);
 
-            $total = 0;
-
-            foreach ($data['lines'] as $lineData) {
-                $quantityM2 = round((float) $lineData['quantity_m2'], 2);
-                $lineTotal = round((float) $lineData['line_total'], 2);
-                $unitPrice = round($lineTotal / $quantityM2, 4);
-
-                SaleItem::create([
-                    'sale_id' => $sale->id,
-                    'fabric_roll_id' => null,
-                    'fabric_type_id' => $lineData['fabric_type_id'],
-                    'unit_price' => $unitPrice,
-                    'quantity_m2' => $quantityM2,
-                    'line_total' => $lineTotal,
-                ]);
-
-                $total += $lineTotal;
-            }
-
-            $sale->update(['total_amount' => round($total, 2)]);
+            SaleItem::create([
+                'sale_id' => $sale->id,
+                'fabric_roll_id' => null,
+                'fabric_type_id' => null,
+                'unit_price' => $totalAmount,
+                'quantity_m2' => 1,
+                'line_total' => $totalAmount,
+            ]);
 
             return $sale;
         });

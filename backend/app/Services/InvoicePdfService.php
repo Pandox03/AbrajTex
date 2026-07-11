@@ -66,7 +66,9 @@ class InvoicePdfService
 
         foreach ($invoice->sale->items as $item) {
             $typeId = (int) ($item->fabric_type_id ?? $item->fabricRoll?->fabric_type_id ?? 0);
-            $fabric = $item->fabricType?->name ?? $item->fabricRoll?->fabricType?->name ?? 'Tissu';
+            $fabric = $item->fabricType?->name
+                ?? $item->fabricRoll?->fabricType?->name
+                ?? ($invoice->sale->sale_type === 'legacy_credit' ? 'Crédit client (historique)' : 'Tissu');
 
             if (! isset($groups[$typeId])) {
                 $groups[$typeId] = [
