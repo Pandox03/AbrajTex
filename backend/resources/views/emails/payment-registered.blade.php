@@ -22,7 +22,12 @@
                 {{ $payment->reference }}
             </h1>
             <p style="margin:0 0 24px;font-size:14px;color:#64748b;line-height:1.5;">
-                Un encaissement vient d'être enregistré et lié à une facture client.
+                Un encaissement vient d'être enregistré pour le client {{ $payment->client?->name ?? '' }}.
+                @if($payment->invoice)
+                    Il est lié à la facture {{ $payment->invoice->reference }}.
+                @else
+                    Le montant sera réparti automatiquement sur les factures les plus anciennes.
+                @endif
             </p>
         </td>
     </tr>
@@ -47,11 +52,11 @@
 @php
     $rows = array_values(array_filter([
         ['Client', $payment->client?->name ?? '—'],
-        ['Facture', $payment->invoice?->reference ?? '—'],
+        ['Facture', $payment->invoice?->reference ?? 'Répartition automatique (FIFO)'],
         ['Date paiement', $payment->payment_date?->format('d/m/Y') ?? '—'],
         ['Statut', $payment->status === 'confirmed' ? 'Confirmé' : ucfirst($payment->status ?? '—')],
         $payment->bank_reference ? ['Réf. banque', $payment->bank_reference] : null,
-        $payment->invoice ? ['Reste à payer', number_format($payment->invoice->remainingToPay(), 2, ',', ' ').' MAD'] : null,
+        $payment->invoice ? ['Reste sur facture', number_format($payment->invoice->remainingToPay(), 2, ',', ' ').' MAD'] : null,
     ]));
 @endphp
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">

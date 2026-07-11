@@ -6,7 +6,6 @@ import { useAuth } from '../context/AuthContext'
 import { useI18n } from '../context/LocaleContext'
 import type { ClientProfile, Invoice, InvoiceStatus, Payment, Sale } from '../types'
 import Card from '../components/ui/Card'
-import InvoicePicker, { invoiceRemaining } from '../components/ui/InvoicePicker'
 import { InvoiceStatusSelect } from '../components/ui/InvoiceStatusSelect'
 import { InvoiceBadge, PaymentBadge } from '../components/ui/StatusBadge'
 
@@ -26,7 +25,6 @@ export default function ClientDetailPage() {
     amount: '',
     payment_date: new Date().toISOString().slice(0, 10),
     method: 'virement',
-    invoice_id: '',
     bank_reference: '',
     notes: '',
   })
@@ -44,7 +42,7 @@ export default function ClientDetailPage() {
 
   async function handlePayment(e: FormEvent) {
     e.preventDefault()
-    if (!profile || !paymentForm.invoice_id) return
+    if (!profile) return
 
     const requiresProof = paymentForm.method === 'virement' || paymentForm.method === 'cheque'
     if (requiresProof && !proofFile) {
@@ -57,7 +55,7 @@ export default function ClientDetailPage() {
 
     try {
       const formData = new FormData()
-      formData.append('invoice_id', paymentForm.invoice_id)
+      formData.append('client_id', String(profile.client.id))
       formData.append('reference', paymentForm.reference)
       formData.append('amount', paymentForm.amount)
       formData.append('payment_date', paymentForm.payment_date)
@@ -75,7 +73,6 @@ export default function ClientDetailPage() {
         amount: '',
         payment_date: new Date().toISOString().slice(0, 10),
         method: 'virement',
-        invoice_id: '',
         bank_reference: '',
         notes: '',
       })
@@ -117,16 +114,8 @@ export default function ClientDetailPage() {
 
   const { client, balance, sales, payments, invoices } = profile
 
-  const selectedInvoice = invoices.find((inv) => String(inv.id) === paymentForm.invoice_id)
   const requiresProof = paymentForm.method === 'virement' || paymentForm.method === 'cheque'
-
-  function handleInvoicePick(invoiceId: string, invoice: Invoice | undefined) {
-    setPaymentForm({
-      ...paymentForm,
-      invoice_id: invoiceId,
-      amount: invoice ? String(invoiceRemaining(invoice)) : '',
-    })
-  }
+  const canPay = balance.balance_due > 0.01
 
   const tabs: { key: Tab; label: string; count: number }[] = [
     { key: 'orders', label: t.clients.orders, count: sales.length },
@@ -186,7 +175,7 @@ export default function ClientDetailPage() {
             </button>
           ))}
         </div>
-        {canRecordPayment && (
+        {canRecordPayment && canPay && (
           <button
             type="button"
             onClick={() => setShowPaymentForm(!showPaymentForm)}
@@ -198,34 +187,15 @@ export default function ClientDetailPage() {
         )}
       </div>
 
-      {canRecordPayment && showPaymentForm && (
+      {canRecordPayment && showPaymentForm && canPay && (
         <Card className="mb-6">
           <form onSubmit={handlePayment} className="space-y-4">
-            <InvoicePicker
-              invoices={invoices}
-              value={paymentForm.invoice_id}
-              onChange={handleInvoicePick}
-              disabled={submittingPayment}
-            />
-
-            {selectedInvoice && (
-              <div className="rounded-xl border border-teal-200 bg-teal-50/60 px-4 py-3 text-sm">
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <div>
-                    <p className="text-xs text-muted">{t.invoices.totalTtc}</p>
-                    <p className="font-semibold text-navy-900">{Number(selectedInvoice.total).toLocaleString('fr-FR')} MAD</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted">{t.clients.remaining}</p>
-                    <p className="font-semibold text-teal-700">{invoiceRemaining(selectedInvoice).toLocaleString('fr-FR')} MAD</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted">{t.invoices.dueDate}</p>
-                    <p className="font-medium">{selectedInvoice.due_date ?? t.common.dash}</p>
-                  </div>
-                </div>
-              </div>
-            )}
+            <div className="rounded-xl border border-teal-200 bg-teal-50/60 px-4 py-3 text-sm">
+              <p className="font-medium text-navy-900">{t.clients.paymentFifoHint}</p>
+              <p className="mt-1 text-muted">
+                {t.clients.balanceDue}: <strong className="text-red-600">{balance.balance_due.toLocaleString('fr-FR')} MAD</strong>
+              </p>
+            </div>
 
             <div className="grid items-start gap-4 md:grid-cols-3">
               <div>
@@ -243,12 +213,11 @@ export default function ClientDetailPage() {
                   type="number"
                   step="0.01"
                   min={0.01}
-                  max={selectedInvoice ? invoiceRemaining(selectedInvoice) : undefined}
+                  max={balance.balance_due}
                   value={paymentForm.amount}
                   onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
                   className="h-10 w-full rounded-xl border border-border px-3 text-sm"
                   required
-                  disabled={!paymentForm.invoice_id}
                 />
               </div>
               <div>
@@ -303,7 +272,7 @@ export default function ClientDetailPage() {
             {paymentError && <p className="text-sm text-red-600">{paymentError}</p>}
             <button
               type="submit"
-              disabled={submittingPayment || !paymentForm.invoice_id}
+              disabled={submittingPayment}
               className="cursor-pointer rounded-xl bg-teal-500 px-4 py-3 font-semibold text-white disabled:opacity-50"
             >
               {submittingPayment ? t.common.loading : t.clients.addPayment}
@@ -354,20 +323,18 @@ export default function ClientDetailPage() {
                   <th className="px-3 py-3">{t.common.date}</th>
                   <th className="px-3 py-3">{t.common.amount}</th>
                   <th className="px-3 py-3">{t.common.method}</th>
-                  <th className="px-3 py-3">{t.clients.linkedInvoice}</th>
                   <th className="px-3 py-3">{t.clients.bankRef}</th>
                   <th className="px-3 py-3">{t.clients.proofDocument}</th>
                 </tr>
               </thead>
               <tbody>
-                {payments.length === 0 && <tr><td colSpan={7} className="px-3 py-8 text-center text-muted">{t.clients.noPayments}</td></tr>}
+                {payments.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-muted">{t.clients.noPayments}</td></tr>}
                 {payments.map((p: Payment) => (
                   <tr key={p.id} className="border-b border-border/70">
                     <td className="px-3 py-3 font-medium">{p.reference}</td>
                     <td className="px-3 py-3">{p.payment_date}</td>
                     <td className="px-3 py-3 font-semibold text-teal-600">{Number(p.amount).toLocaleString('fr-FR')} MAD</td>
                     <td className="px-3 py-3">{t.paymentMethod[p.method]}</td>
-                    <td className="px-3 py-3">{p.invoice?.reference ?? t.common.dash}</td>
                     <td className="px-3 py-3">{p.bank_reference ?? t.common.dash}</td>
                     <td className="px-3 py-3">
                       {p.proof_document_url ? (

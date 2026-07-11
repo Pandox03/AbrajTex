@@ -234,6 +234,7 @@ export const fr = {
     noPayments: 'Aucun paiement.',
     noInvoices: 'Aucune facture.',
     addPayment: 'Enregistrer un paiement',
+    paymentFifoHint: 'Saisissez le montant reçu. Il sera automatiquement imputé sur les factures les plus anciennes en premier.',
     paymentRef: 'Réf. paiement',
     linkedInvoice: 'Facture',
     chooseInvoice: 'Choisir une facture dans la liste…',
@@ -331,8 +332,9 @@ export const fr = {
   },
   payments: {
     title: 'Paiements',
-    description: 'Historique des encaissements liés aux factures clients.',
+    description: 'Encaissements clients répartis automatiquement sur les factures (plus anciennes en premier).',
     invoice: 'Facture',
+    autoAllocation: 'Répartition auto.',
     date: 'Date',
     method: 'Mode',
     amount: 'Montant',

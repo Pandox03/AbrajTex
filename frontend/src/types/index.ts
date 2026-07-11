@@ -180,6 +180,7 @@ export interface Payment {
   status: 'pending' | 'confirmed' | 'cancelled'
   bank_reference?: string | null
   proof_document_url?: string | null
+  auto_allocated?: boolean
   notes?: string | null
   client?: Client
   sale?: Sale

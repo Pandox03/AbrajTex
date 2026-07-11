@@ -234,6 +234,7 @@ export const ar = {
     noPayments: 'لا توجد مدفوعات.',
     noInvoices: 'لا توجد فواتير.',
     addPayment: 'تسجيل دفعة',
+    paymentFifoHint: 'أدخل المبلغ المستلم. يُخصم تلقائياً من أقدم الفواتير أولاً.',
     paymentRef: 'مرجع الدفع',
     linkedInvoice: 'الفاتورة',
     chooseInvoice: 'اختر فاتورة من القائمة…',
@@ -331,8 +332,9 @@ export const ar = {
   },
   payments: {
     title: 'المدفوعات',
-    description: 'سجل المقبوضات المرتبطة بفواتير العملاء.',
+    description: 'مقبوضات العملاء تُوزّع تلقائياً على الفواتير (الأقدم أولاً).',
     invoice: 'الفاتورة',
+    autoAllocation: 'توزيع تلقائي',
     date: 'التاريخ',
     method: 'طريقة الدفع',
     amount: 'المبلغ',

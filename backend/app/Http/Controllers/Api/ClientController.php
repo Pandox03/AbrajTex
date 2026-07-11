@@ -91,14 +91,16 @@ class ClientController extends Controller
                 return $data;
             });
 
+        $allocations = $this->billing->fifoInvoiceAllocations($client);
+
         $invoices = $client->invoices()
             ->with('sale')
             ->latest('invoice_date')
             ->limit(50)
             ->get()
             ->map(fn ($invoice) => array_merge($invoice->toArray(), [
-                'paid_amount' => $invoice->paidAmount(),
-                'remaining_to_pay' => $invoice->remainingToPay(),
+                'paid_amount' => $allocations[$invoice->id] ?? 0,
+                'remaining_to_pay' => round(max(0, (float) $invoice->total - ($allocations[$invoice->id] ?? 0)), 2),
             ]));
 
         return response()->json([

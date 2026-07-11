@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\BillingService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -51,11 +52,11 @@ class Invoice extends Model
 
     public function paidAmount(): float
     {
-        return round((float) $this->payments()->where('status', 'confirmed')->sum('amount'), 2);
+        return app(BillingService::class)->invoicePaidAmount($this);
     }
 
     public function remainingToPay(): float
     {
-        return round(max(0, (float) $this->total - $this->paidAmount()), 2);
+        return app(BillingService::class)->invoiceRemainingToPay($this);
     }
 }

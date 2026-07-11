@@ -115,7 +115,9 @@ export default function PaymentsPage() {
                       {payment.client?.name}
                     </Link>
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3">{payment.invoice?.reference ?? t.common.dash}</td>
+                  <td className="whitespace-nowrap px-4 py-3">
+                    {payment.invoice?.reference ?? (payment.auto_allocated ? t.payments.autoAllocation : t.common.dash)}
+                  </td>
                   <td className="whitespace-nowrap px-4 py-3">{formatDateShort(payment.payment_date)}</td>
                   <td className="whitespace-nowrap px-4 py-3">{t.paymentMethod[payment.method]}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-right font-semibold">

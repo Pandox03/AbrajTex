@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Invoice;
+use App\Models\Client;
 use App\Models\Payment;
 use App\Services\ActivityLogger;
 use App\Services\AdminNotificationService;
@@ -70,7 +70,7 @@ class PaymentController extends Controller
         $requiresProof = in_array($request->input('method'), ['virement', 'cheque'], true);
 
         $data = $request->validate([
-            'invoice_id' => ['required', 'exists:invoices,id'],
+            'client_id' => ['required', 'exists:clients,id'],
             'reference' => ['required', 'string', 'max:100', 'unique:payments,reference'],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'payment_date' => ['required', 'date'],
@@ -87,10 +87,10 @@ class PaymentController extends Controller
             ],
         ]);
 
-        $invoice = Invoice::with('sale')->findOrFail($data['invoice_id']);
+        $client = Client::findOrFail($data['client_id']);
 
         try {
-            $this->billing->validatePaymentAmount($invoice, (float) $data['amount']);
+            $this->billing->validateClientPaymentAmount($client, (float) $data['amount']);
         } catch (InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -100,10 +100,10 @@ class PaymentController extends Controller
             $proofPath = $request->file('proof_document')->store('payment-proofs', 'public');
         }
 
-        $payment = DB::transaction(function () use ($data, $request, $invoice, $proofPath) {
+        $payment = DB::transaction(function () use ($data, $request, $client, $proofPath) {
             $payment = Payment::create([
-                'client_id' => $invoice->client_id,
-                'invoice_id' => $invoice->id,
+                'client_id' => $client->id,
+                'invoice_id' => null,
                 'sale_id' => null,
                 'reference' => $data['reference'],
                 'amount' => $data['amount'],
@@ -121,16 +121,16 @@ class PaymentController extends Controller
             return $payment;
         });
 
-        $payment->load(['client', 'invoice.sale']);
+        $payment->load(['client']);
 
         $this->logger->log(
             $request->user(),
             $request,
             'created',
-            "Paiement enregistré — {$payment->reference} ({$payment->amount} MAD) · {$invoice->reference}",
+            "Paiement enregistré — {$payment->reference} ({$payment->amount} MAD) · {$client->name}",
             'payment',
             $payment->id,
-            ['client' => $payment->client?->name, 'invoice' => $invoice->reference],
+            ['client' => $client->name, 'amount' => $payment->amount],
         );
 
         $this->adminNotifications->notifyPaymentRegistered($payment);
@@ -154,6 +154,7 @@ class PaymentController extends Controller
         $data['proof_document_url'] = $payment->proof_document
             ? url("/api/payments/{$payment->id}/proof")
             : null;
+        $data['auto_allocated'] = $payment->invoice_id === null;
 
         return $data;
     }
