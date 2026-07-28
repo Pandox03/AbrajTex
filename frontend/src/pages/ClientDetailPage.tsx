@@ -655,6 +655,7 @@ export default function ClientDetailPage() {
             <table className="min-w-full text-left text-sm">
               <thead className="border-b border-border text-muted">
                 <tr>
+                  <th className="w-10 px-2 py-3" aria-hidden />
                   <th className="px-3 py-3">{t.common.reference}</th>
                   <th className="px-3 py-3">{t.common.date}</th>
                   <th className="px-3 py-3">{t.common.total}</th>
@@ -662,13 +663,13 @@ export default function ClientDetailPage() {
                   <th className="px-3 py-3">{t.clients.amountPaid}</th>
                   <th className="px-3 py-3">{t.sales.balance}</th>
                   <th className="px-3 py-3">{t.common.notes}</th>
-                  <th className="px-3 py-3 text-right">{t.common.actions}</th>
+                  {(canEditClient || canRecordPayment) && <th className="px-3 py-3 text-right">{t.common.actions}</th>}
                 </tr>
               </thead>
               <tbody>
                 {credits.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-3 py-8 text-center text-muted">{t.clients.noCredits}</td>
+                    <td colSpan={(canEditClient || canRecordPayment) ? 9 : 8} className="px-3 py-8 text-center text-muted">{t.clients.noCredits}</td>
                   </tr>
                 )}
                 {credits.map((credit: Sale) => {
@@ -676,10 +677,22 @@ export default function ClientDetailPage() {
                   const canPayCredit = canRecordPayment && creditDue > 0.01
                   const creditPayments = creditPaymentsBySaleId[credit.id] ?? []
                   const isExpanded = expandedCreditId === credit.id
+                  const colSpan = (canEditClient || canRecordPayment) ? 9 : 8
 
                   return (
                     <Fragment key={credit.id}>
                       <tr className="border-b border-border/70">
+                        <td className="px-2 py-3">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedCreditId(isExpanded ? null : credit.id)}
+                            className="inline-flex cursor-pointer items-center justify-center rounded-lg p-1.5 text-navy-800 hover:bg-surface"
+                            title={isExpanded ? t.clients.hideCreditPayments : t.clients.showCreditPayments}
+                            aria-expanded={isExpanded}
+                          >
+                            {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                          </button>
+                        </td>
                         <td className="px-3 py-3 font-medium">{credit.reference}</td>
                         <td className="px-3 py-3">{formatDateShort(credit.sale_date)}</td>
                         <td className="px-3 py-3 font-semibold text-amber-700">{Number(credit.total_amount).toLocaleString('fr-FR')} MAD</td>
@@ -687,39 +700,31 @@ export default function ClientDetailPage() {
                         <td className="px-3 py-3 text-teal-600">{Number(credit.paid_amount ?? 0).toLocaleString('fr-FR')} MAD</td>
                         <td className="px-3 py-3 font-medium text-red-600">{creditDue.toLocaleString('fr-FR')} MAD</td>
                         <td className="px-3 py-3">{credit.notes ?? t.common.dash}</td>
-                        <td className="px-3 py-3 text-right">
-                          <div className="inline-flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setExpandedCreditId(isExpanded ? null : credit.id)}
-                              className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-border px-2 py-1.5 text-xs font-medium hover:bg-surface"
-                              title={isExpanded ? t.clients.hideCreditPayments : t.clients.showCreditPayments}
-                            >
-                              {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                              {t.clients.payments}
-                              {creditPayments.length > 0 ? ` (${creditPayments.length})` : ''}
-                            </button>
-                            {canPayCredit && (
-                              <button type="button" onClick={() => openCreditPaymentForm(credit)} className="cursor-pointer rounded-lg border border-border p-2 text-teal-700 hover:bg-teal-50" title={t.clients.addCreditPayment}>
-                                <Banknote size={14} />
-                              </button>
-                            )}
-                            {canEditClient && (
-                              <>
-                                <button type="button" onClick={() => openCreditEdit(credit)} className="cursor-pointer rounded-lg border border-border p-2 hover:bg-surface" title={t.clients.edit}>
-                                  <Pencil size={14} />
+                        {(canEditClient || canRecordPayment) && (
+                          <td className="px-3 py-3 text-right">
+                            <div className="inline-flex gap-2">
+                              {canPayCredit && (
+                                <button type="button" onClick={() => openCreditPaymentForm(credit)} className="cursor-pointer rounded-lg border border-border p-2 text-teal-700 hover:bg-teal-50" title={t.clients.addCreditPayment}>
+                                  <Banknote size={14} />
                                 </button>
-                                <button type="button" onClick={() => handleCreditDelete(credit)} className="cursor-pointer rounded-lg border border-border p-2 text-red-600 hover:bg-red-50" title={t.users.delete}>
-                                  <Trash2 size={14} />
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </td>
+                              )}
+                              {canEditClient && (
+                                <>
+                                  <button type="button" onClick={() => openCreditEdit(credit)} className="cursor-pointer rounded-lg border border-border p-2 hover:bg-surface" title={t.clients.edit}>
+                                    <Pencil size={14} />
+                                  </button>
+                                  <button type="button" onClick={() => handleCreditDelete(credit)} className="cursor-pointer rounded-lg border border-border p-2 text-red-600 hover:bg-red-50" title={t.users.delete}>
+                                    <Trash2 size={14} />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        )}
                       </tr>
                       {isExpanded && (
                         <tr className="border-b border-border/70 bg-amber-50/40">
-                          <td colSpan={8} className="px-3 py-4">
+                          <td colSpan={colSpan} className="px-3 py-4">
                             {creditPayments.length === 0 ? (
                               <p className="text-sm text-muted">{t.clients.noCreditPayments}</p>
                             ) : (

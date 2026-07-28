@@ -238,7 +238,7 @@ export const ar = {
     totalBalanceDue: 'الرصيد الإجمالي',
     paymentsOnSalesAndCredits: 'المدفوعات على المبيعات والديون',
     noCredits: 'لا توجد ديون مسجّلة.',
-    creditsPaymentHelp: 'سجّل دفعة جزئية أو كاملة على كل دين. انقر على « المدفوعات » لإظهار أو إخفاء التفاصيل.',
+    creditsPaymentHelp: 'سجّل دفعة جزئية أو كاملة على كل دين. انقر على السهم يساراً لإظهار أو إخفاء التفاصيل.',
     addCreditPayment: 'دفع هذا الدين',
     creditPaymentHint: 'الدفعة تُخصم من هذا الدين فقط (جزئية أو كاملة).',
     amountPaid: 'المدفوع',

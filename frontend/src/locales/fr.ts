@@ -238,7 +238,7 @@ export const fr = {
     totalBalanceDue: 'Solde total',
     paymentsOnSalesAndCredits: 'Paiements sur ventes et crédits',
     noCredits: 'Aucun crédit enregistré.',
-    creditsPaymentHelp: 'Enregistrez un paiement partiel ou total sur chaque crédit. Cliquez sur « Paiements » pour afficher ou masquer le détail.',
+    creditsPaymentHelp: 'Enregistrez un paiement partiel ou total sur chaque crédit. Cliquez sur la flèche à gauche pour afficher ou masquer le détail.',
     addCreditPayment: 'Payer ce crédit',
     creditPaymentHint: 'Paiement imputé sur ce crédit uniquement (partiel ou total).',
     amountPaid: 'Payé',
