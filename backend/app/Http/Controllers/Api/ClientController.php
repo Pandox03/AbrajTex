@@ -48,7 +48,9 @@ class ClientController extends Controller
             return response()->json($clients);
         }
 
-        $clients = $query->withCount('sales')->orderBy('name')->paginate(20);
+        $perPage = min(max($request->integer('per_page', 1000), 1), 1000);
+
+        $clients = $query->withCount('sales')->orderBy('name')->paginate($perPage);
 
         $stats = $this->billing->clientListStats($clients->getCollection());
 

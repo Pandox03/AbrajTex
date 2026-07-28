@@ -18,7 +18,10 @@ export default function ClientsPage() {
   })
 
   const load = useCallback(() => {
-    const params = Object.fromEntries(Object.entries(filters).filter(([, v]) => v))
+    const params = {
+      per_page: 1000,
+      ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v)),
+    }
     api.get<Paginated<Client>>('/clients', { params }).then((res) => setClients(res.data.data))
   }, [filters])
 
