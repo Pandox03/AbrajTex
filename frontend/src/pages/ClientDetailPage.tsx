@@ -1,6 +1,6 @@
-import { FormEvent, useCallback, useEffect, useState } from 'react'
+import { FormEvent, Fragment, useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Banknote, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, Banknote, ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react'
 import api from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { useI18n } from '../context/LocaleContext'
@@ -51,6 +51,7 @@ export default function ClientDetailPage() {
   const [editError, setEditError] = useState('')
   const [submittingEdit, setSubmittingEdit] = useState(false)
   const [editingCreditId, setEditingCreditId] = useState<number | null>(null)
+  const [expandedCreditId, setExpandedCreditId] = useState<number | null>(null)
   const [creditForm, setCreditForm] = useState({
     reference: '',
     sale_date: '',
@@ -144,6 +145,7 @@ export default function ClientDetailPage() {
 
       await api.post('/payments', formData)
 
+      const paidCreditId = paymentTargetCreditId
       setShowPaymentForm(false)
       setPaymentTargetCreditId(null)
       setProofFile(null)
@@ -155,6 +157,7 @@ export default function ClientDetailPage() {
         bank_reference: '',
         notes: '',
       })
+      if (paidCreditId) setExpandedCreditId(paidCreditId)
       load()
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
@@ -275,6 +278,14 @@ export default function ClientDetailPage() {
 
   const { client, balance, stock_sales, credits, payments, invoices } = profile
 
+  const salesPayments = payments.filter((p) => !p.sale_id)
+  const creditPaymentsBySaleId = payments.reduce<Record<number, Payment[]>>((acc, p) => {
+    if (p.sale_id) {
+      ;(acc[p.sale_id] ??= []).push(p)
+    }
+    return acc
+  }, {})
+
   const requiresProof = paymentForm.method === 'virement' || paymentForm.method === 'cheque'
   const canPaySales = balance.sales_balance_due > 0.01
   const payingCredit = paymentTargetCreditId
@@ -288,7 +299,7 @@ export default function ClientDetailPage() {
   const tabs: { key: Tab; label: string; count: number }[] = [
     { key: 'orders', label: t.clients.orders, count: stock_sales.length },
     { key: 'credits', label: t.nav.credits, count: credits.length },
-    { key: 'payments', label: t.clients.payments, count: payments.length },
+    { key: 'payments', label: t.clients.payments, count: salesPayments.length },
     { key: 'invoices', label: t.clients.invoices, count: invoices.length },
   ]
 
@@ -651,31 +662,43 @@ export default function ClientDetailPage() {
                   <th className="px-3 py-3">{t.clients.amountPaid}</th>
                   <th className="px-3 py-3">{t.sales.balance}</th>
                   <th className="px-3 py-3">{t.common.notes}</th>
-                  {(canEditClient || canRecordPayment) && <th className="px-3 py-3 text-right">{t.common.actions}</th>}
+                  <th className="px-3 py-3 text-right">{t.common.actions}</th>
                 </tr>
               </thead>
               <tbody>
                 {credits.length === 0 && (
                   <tr>
-                    <td colSpan={(canEditClient || canRecordPayment) ? 8 : 7} className="px-3 py-8 text-center text-muted">{t.clients.noCredits}</td>
+                    <td colSpan={8} className="px-3 py-8 text-center text-muted">{t.clients.noCredits}</td>
                   </tr>
                 )}
                 {credits.map((credit: Sale) => {
                   const creditDue = credit.balance_due ?? Number(credit.total_amount) - Number(credit.paid_amount ?? 0)
                   const canPayCredit = canRecordPayment && creditDue > 0.01
+                  const creditPayments = creditPaymentsBySaleId[credit.id] ?? []
+                  const isExpanded = expandedCreditId === credit.id
 
                   return (
-                    <tr key={credit.id} className="border-b border-border/70">
-                      <td className="px-3 py-3 font-medium">{credit.reference}</td>
-                      <td className="px-3 py-3">{formatDateShort(credit.sale_date)}</td>
-                      <td className="px-3 py-3 font-semibold text-amber-700">{Number(credit.total_amount).toLocaleString('fr-FR')} MAD</td>
-                      <td className="px-3 py-3">{credit.payment_status && <PaymentBadge status={credit.payment_status} />}</td>
-                      <td className="px-3 py-3 text-teal-600">{Number(credit.paid_amount ?? 0).toLocaleString('fr-FR')} MAD</td>
-                      <td className="px-3 py-3 font-medium text-red-600">{creditDue.toLocaleString('fr-FR')} MAD</td>
-                      <td className="px-3 py-3">{credit.notes ?? t.common.dash}</td>
-                      {(canEditClient || canRecordPayment) && (
+                    <Fragment key={credit.id}>
+                      <tr className="border-b border-border/70">
+                        <td className="px-3 py-3 font-medium">{credit.reference}</td>
+                        <td className="px-3 py-3">{formatDateShort(credit.sale_date)}</td>
+                        <td className="px-3 py-3 font-semibold text-amber-700">{Number(credit.total_amount).toLocaleString('fr-FR')} MAD</td>
+                        <td className="px-3 py-3">{credit.payment_status && <PaymentBadge status={credit.payment_status} />}</td>
+                        <td className="px-3 py-3 text-teal-600">{Number(credit.paid_amount ?? 0).toLocaleString('fr-FR')} MAD</td>
+                        <td className="px-3 py-3 font-medium text-red-600">{creditDue.toLocaleString('fr-FR')} MAD</td>
+                        <td className="px-3 py-3">{credit.notes ?? t.common.dash}</td>
                         <td className="px-3 py-3 text-right">
                           <div className="inline-flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedCreditId(isExpanded ? null : credit.id)}
+                              className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-border px-2 py-1.5 text-xs font-medium hover:bg-surface"
+                              title={isExpanded ? t.clients.hideCreditPayments : t.clients.showCreditPayments}
+                            >
+                              {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                              {t.clients.payments}
+                              {creditPayments.length > 0 ? ` (${creditPayments.length})` : ''}
+                            </button>
                             {canPayCredit && (
                               <button type="button" onClick={() => openCreditPaymentForm(credit)} className="cursor-pointer rounded-lg border border-border p-2 text-teal-700 hover:bg-teal-50" title={t.clients.addCreditPayment}>
                                 <Banknote size={14} />
@@ -693,8 +716,52 @@ export default function ClientDetailPage() {
                             )}
                           </div>
                         </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr className="border-b border-border/70 bg-amber-50/40">
+                          <td colSpan={8} className="px-3 py-4">
+                            {creditPayments.length === 0 ? (
+                              <p className="text-sm text-muted">{t.clients.noCreditPayments}</p>
+                            ) : (
+                              <div className="overflow-x-auto rounded-xl border border-border bg-card">
+                                <table className="min-w-full text-left text-sm">
+                                  <thead className="border-b border-border text-muted">
+                                    <tr>
+                                      <th className="px-3 py-2">{t.common.reference}</th>
+                                      <th className="px-3 py-2">{t.common.date}</th>
+                                      <th className="px-3 py-2">{t.common.amount}</th>
+                                      <th className="px-3 py-2">{t.common.method}</th>
+                                      <th className="px-3 py-2">{t.clients.bankRef}</th>
+                                      <th className="px-3 py-2">{t.common.notes}</th>
+                                      <th className="px-3 py-2">{t.clients.proofDocument}</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {creditPayments.map((p) => (
+                                      <tr key={p.id} className="border-b border-border/60 last:border-0">
+                                        <td className="px-3 py-2 font-medium">{p.reference}</td>
+                                        <td className="px-3 py-2">{formatDateShort(p.payment_date)}</td>
+                                        <td className="px-3 py-2 font-semibold text-teal-600">{Number(p.amount).toLocaleString('fr-FR')} MAD</td>
+                                        <td className="px-3 py-2">{t.paymentMethod[p.method]}</td>
+                                        <td className="px-3 py-2">{p.bank_reference ?? t.common.dash}</td>
+                                        <td className="px-3 py-2">{p.notes ?? t.common.dash}</td>
+                                        <td className="px-3 py-2">
+                                          {p.proof_document_url ? (
+                                            <button type="button" onClick={() => downloadProof(p)} className="cursor-pointer text-sm text-teal-600 hover:underline">
+                                              {t.clients.viewProof}
+                                            </button>
+                                          ) : t.common.dash}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
                       )}
-                    </tr>
+                    </Fragment>
                   )
                 })}
               </tbody>
@@ -714,24 +781,18 @@ export default function ClientDetailPage() {
                   <th className="px-3 py-3">{t.common.date}</th>
                   <th className="px-3 py-3">{t.common.amount}</th>
                   <th className="px-3 py-3">{t.common.method}</th>
-                  <th className="px-3 py-3">{t.clients.linkedCreditOrSale}</th>
                   <th className="px-3 py-3">{t.clients.bankRef}</th>
                   <th className="px-3 py-3">{t.clients.proofDocument}</th>
                 </tr>
               </thead>
               <tbody>
-                {payments.length === 0 && <tr><td colSpan={7} className="px-3 py-8 text-center text-muted">{t.clients.noPayments}</td></tr>}
-                {payments.map((p: Payment) => (
+                {salesPayments.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-muted">{t.clients.noPayments}</td></tr>}
+                {salesPayments.map((p: Payment) => (
                   <tr key={p.id} className="border-b border-border/70">
                     <td className="px-3 py-3 font-medium">{p.reference}</td>
                     <td className="px-3 py-3">{formatDateShort(p.payment_date)}</td>
                     <td className="px-3 py-3 font-semibold text-teal-600">{Number(p.amount).toLocaleString('fr-FR')} MAD</td>
                     <td className="px-3 py-3">{t.paymentMethod[p.method]}</td>
-                    <td className="px-3 py-3">
-                      {p.sale?.reference
-                        ? `${p.sale.sale_type === 'legacy_credit' ? t.nav.credits : t.clients.orders}: ${p.sale.reference}`
-                        : t.clients.autoAllocationSales}
-                    </td>
                     <td className="px-3 py-3">{p.bank_reference ?? t.common.dash}</td>
                     <td className="px-3 py-3">
                       {p.proof_document_url ? (
@@ -745,6 +806,7 @@ export default function ClientDetailPage() {
               </tbody>
             </table>
           </div>
+          <p className="mt-4 text-xs text-muted">{t.clients.salesPaymentsOnlyHint}</p>
         </Card>
       )}
 
