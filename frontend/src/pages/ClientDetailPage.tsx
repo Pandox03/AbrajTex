@@ -5,6 +5,7 @@ import api from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { useI18n } from '../context/LocaleContext'
 import type { Client, ClientProfile, Invoice, InvoiceStatus, Payment, Sale } from '../types'
+import { toInputDate } from '../lib/format'
 import Card from '../components/ui/Card'
 import { InvoiceStatusSelect } from '../components/ui/InvoiceStatusSelect'
 import { InvoiceBadge, PaymentBadge } from '../components/ui/StatusBadge'
@@ -16,7 +17,7 @@ export default function ClientDetailPage() {
   const { isAdmin, isSecretaire } = useAuth()
   const canEditClient = isAdmin || isSecretaire
   const canRecordPayment = isAdmin || isSecretaire
-  const { t } = useI18n()
+  const { t, formatDateShort } = useI18n()
   const [profile, setProfile] = useState<ClientProfile | null>(null)
   const [tab, setTab] = useState<Tab>('orders')
   const [showEditForm, setShowEditForm] = useState(false)
@@ -188,7 +189,7 @@ export default function ClientDetailPage() {
   function openCreditEdit(credit: Sale) {
     setCreditForm({
       reference: credit.reference,
-      sale_date: credit.sale_date.slice(0, 10),
+      sale_date: toInputDate(credit.sale_date),
       total_amount: String(credit.total_amount),
       notes: credit.notes ?? '',
     })
@@ -221,7 +222,7 @@ export default function ClientDetailPage() {
   }
 
   async function handleCreditDelete(credit: Sale) {
-    if (!credit.can_delete || !window.confirm(t.clients.deleteCreditConfirm.replace('{ref}', credit.reference))) {
+    if (!window.confirm(t.clients.deleteCreditConfirm.replace('{ref}', credit.reference))) {
       return
     }
 
@@ -514,7 +515,7 @@ export default function ClientDetailPage() {
                 {stock_sales.map((sale: Sale) => (
                   <tr key={sale.id} className="border-b border-border/70">
                     <td className="px-3 py-3 font-medium">{sale.reference}</td>
-                    <td className="px-3 py-3">{sale.sale_date}</td>
+                    <td className="px-3 py-3">{formatDateShort(sale.sale_date)}</td>
                     <td className="px-3 py-3">{Number(sale.total_amount).toLocaleString('fr-FR')} MAD</td>
                     <td className="px-3 py-3">{sale.payment_status && <PaymentBadge status={sale.payment_status} />}</td>
                     <td className="px-3 py-3">{(sale.balance_due ?? Number(sale.total_amount) - Number(sale.paid_amount ?? 0)).toLocaleString('fr-FR')} MAD</td>
@@ -578,22 +579,18 @@ export default function ClientDetailPage() {
                 {credits.map((credit: Sale) => (
                   <tr key={credit.id} className="border-b border-border/70">
                     <td className="px-3 py-3 font-medium">{credit.reference}</td>
-                    <td className="px-3 py-3">{credit.sale_date}</td>
+                    <td className="px-3 py-3">{formatDateShort(credit.sale_date)}</td>
                     <td className="px-3 py-3 font-semibold text-amber-700">{Number(credit.total_amount).toLocaleString('fr-FR')} MAD</td>
                     <td className="px-3 py-3">{credit.notes ?? t.common.dash}</td>
                     {canEditClient && (
                       <td className="px-3 py-3 text-right">
                         <div className="inline-flex gap-2">
-                          {credit.can_edit && (
-                            <button type="button" onClick={() => openCreditEdit(credit)} className="cursor-pointer rounded-lg border border-border p-2 hover:bg-surface" title={t.clients.edit}>
-                              <Pencil size={14} />
-                            </button>
-                          )}
-                          {credit.can_delete && (
-                            <button type="button" onClick={() => handleCreditDelete(credit)} className="cursor-pointer rounded-lg border border-border p-2 text-red-600 hover:bg-red-50" title={t.users.delete}>
-                              <Trash2 size={14} />
-                            </button>
-                          )}
+                          <button type="button" onClick={() => openCreditEdit(credit)} className="cursor-pointer rounded-lg border border-border p-2 hover:bg-surface" title={t.clients.edit}>
+                            <Pencil size={14} />
+                          </button>
+                          <button type="button" onClick={() => handleCreditDelete(credit)} className="cursor-pointer rounded-lg border border-border p-2 text-red-600 hover:bg-red-50" title={t.users.delete}>
+                            <Trash2 size={14} />
+                          </button>
                         </div>
                       </td>
                     )}

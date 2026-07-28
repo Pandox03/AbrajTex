@@ -109,8 +109,8 @@ class ClientController extends Controller
             ->get()
             ->map(function ($sale) use ($mapSale) {
                 $data = $mapSale($sale);
-                $data['can_edit'] = ($sale->invoices_count ?? 0) === 0;
-                $data['can_delete'] = $data['can_edit'];
+                $data['can_edit'] = true;
+                $data['can_delete'] = true;
 
                 return $data;
             });

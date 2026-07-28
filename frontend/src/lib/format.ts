@@ -4,6 +4,11 @@ function resolveLocale(locale?: LocaleCode): string {
   return locale === 'ar' ? 'ar-MA' : 'fr-FR'
 }
 
+export function toInputDate(value: string | null | undefined): string {
+  if (!value) return ''
+  return value.slice(0, 10)
+}
+
 export function formatDate(value: string | null | undefined, locale?: LocaleCode): string {
   if (!value) return '—'
   const date = new Date(value.includes('T') ? value : `${value}T00:00:00`)

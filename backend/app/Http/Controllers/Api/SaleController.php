@@ -247,10 +247,6 @@ class SaleController extends Controller
             return response()->json(['message' => 'Seuls les crédits historiques peuvent être modifiés.'], 422);
         }
 
-        if ($sale->invoices()->exists()) {
-            return response()->json(['message' => 'Impossible de modifier un crédit déjà facturé.'], 422);
-        }
-
         $data = $request->validate([
             'reference' => ['sometimes', 'string', 'max:100', 'unique:sales,reference,'.$sale->id],
             'sale_date' => ['sometimes', 'date'],
@@ -274,8 +270,9 @@ class SaleController extends Controller
             }
 
             $sale->update($data);
+            $this->syncLegacyCreditInvoices($sale);
 
-            return $sale->fresh(['client', 'items']);
+            return $sale->fresh(['client', 'items', 'invoices']);
         });
 
         $this->logger->log(
@@ -297,14 +294,15 @@ class SaleController extends Controller
             return response()->json(['message' => 'Seules les entrées crédit peuvent être supprimées.'], 422);
         }
 
-        if ($sale->invoices()->exists()) {
-            return response()->json(['message' => 'Impossible de supprimer un crédit déjà facturé.'], 422);
+        if ($sale->invoices()->whereHas('payments')->exists()) {
+            return response()->json(['message' => 'Impossible de supprimer un crédit dont la facture a des paiements.'], 422);
         }
 
         $reference = $sale->reference;
         $id = $sale->id;
 
         DB::transaction(function () use ($sale) {
+            $sale->invoices()->delete();
             $sale->items()->delete();
             $sale->delete();
         });
@@ -319,5 +317,38 @@ class SaleController extends Controller
         );
 
         return response()->json(null, 204);
+    }
+
+    private function syncLegacyCreditInvoices(Sale $sale): void
+    {
+        $invoices = $sale->invoices()->get();
+
+        if ($invoices->isEmpty()) {
+            return;
+        }
+
+        $client = $sale->client;
+        $saleDate = $sale->sale_date;
+
+        if ($invoices->count() === 1) {
+            $invoice = $invoices->first();
+            $breakdown = $this->billing->splitTtc((float) $sale->total_amount, (float) $invoice->tax_rate);
+            $invoice->update([
+                'invoice_date' => $saleDate,
+                'due_date' => $saleDate->copy()->addDays($client->payment_terms_days ?? 30),
+                'subtotal' => $breakdown['subtotal'],
+                'tax_amount' => $breakdown['tax_amount'],
+                'total' => $breakdown['total'],
+            ]);
+
+            return;
+        }
+
+        foreach ($invoices as $invoice) {
+            $invoice->update([
+                'invoice_date' => $saleDate,
+                'due_date' => $saleDate->copy()->addDays($client->payment_terms_days ?? 30),
+            ]);
+        }
     }
 }
