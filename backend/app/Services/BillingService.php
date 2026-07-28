@@ -72,8 +72,8 @@ class BillingService
     }
 
     /**
-     * Allocate confirmed client payments to stock sales only (FIFO by sale date).
-     * Legacy credits are excluded from payment allocation.
+     * Allocate confirmed untargeted payments to stock sales only (FIFO by sale date).
+     * Payments with sale_id (credit payments) are excluded.
      *
      * @return array<int, float> sale_id => allocated amount
      */
@@ -86,6 +86,7 @@ class BillingService
         $payments = Payment::query()
             ->where('client_id', $client->id)
             ->where('status', 'confirmed')
+            ->whereNull('sale_id')
             ->orderBy('payment_date')
             ->orderBy('id')
             ->get();
@@ -136,10 +137,22 @@ class BillingService
         return $allocations;
     }
 
+    public function creditPaidAmount(Sale $sale): float
+    {
+        if ($sale->sale_type !== 'legacy_credit') {
+            return 0.0;
+        }
+
+        return round((float) Payment::query()
+            ->where('sale_id', $sale->id)
+            ->where('status', 'confirmed')
+            ->sum('amount'), 2);
+    }
+
     public function salePaidAmount(Sale $sale, ?array $allocations = null): float
     {
         if ($sale->sale_type === 'legacy_credit') {
-            return 0.0;
+            return $this->creditPaidAmount($sale);
         }
 
         $allocations ??= $this->fifoStockSaleAllocations($sale->client);
@@ -149,15 +162,13 @@ class BillingService
 
     public function saleBalanceDue(Sale $sale, ?array $allocations = null): float
     {
-        if ($sale->sale_type === 'legacy_credit') {
-            return round((float) $sale->total_amount, 2);
-        }
-
         return round(max(0, (float) $sale->total_amount - $this->salePaidAmount($sale, $allocations)), 2);
     }
 
     /**
-     * Allocate confirmed client payments to invoices (FIFO by invoice date).
+     * Allocate confirmed payments to invoices.
+     * Credit-targeted payments (sale_id set) go only to that sale's invoices first;
+     * untagged payments FIFO across remaining invoice balances.
      *
      * @return array<int, float> invoice_id => allocated amount
      */
@@ -182,13 +193,36 @@ class BillingService
 
         $allocations = [];
         $remainingByInvoice = [];
+        $invoicesBySale = [];
 
         foreach ($invoices as $invoice) {
             $allocations[$invoice->id] = 0.0;
             $remainingByInvoice[$invoice->id] = (float) $invoice->total;
+            $invoicesBySale[$invoice->sale_id][] = $invoice;
         }
 
-        foreach ($payments as $payment) {
+        foreach ($payments->whereNotNull('sale_id') as $payment) {
+            $left = (float) $payment->amount;
+            $saleInvoices = $invoicesBySale[$payment->sale_id] ?? [];
+
+            foreach ($saleInvoices as $invoice) {
+                if ($left <= 0.001) {
+                    break;
+                }
+
+                $canApply = min($left, $remainingByInvoice[$invoice->id]);
+
+                if ($canApply <= 0) {
+                    continue;
+                }
+
+                $allocations[$invoice->id] += $canApply;
+                $remainingByInvoice[$invoice->id] -= $canApply;
+                $left -= $canApply;
+            }
+        }
+
+        foreach ($payments->whereNull('sale_id') as $payment) {
             $left = (float) $payment->amount;
 
             foreach ($invoices as $invoice) {
@@ -260,15 +294,6 @@ class BillingService
         $sales = Sale::query()->where('client_id', $client->id)->get();
 
         foreach ($sales as $sale) {
-            if ($sale->sale_type === 'legacy_credit') {
-                $sale->update([
-                    'paid_amount' => 0,
-                    'payment_status' => 'unpaid',
-                ]);
-
-                continue;
-            }
-
             $paid = $this->salePaidAmount($sale, $saleAllocations);
             $total = (float) $sale->total_amount;
             $status = match (true) {
@@ -327,13 +352,33 @@ class BillingService
         ]);
     }
 
-    public function validateClientPaymentAmount(Client $client, float $amount): void
+    public function validateClientPaymentAmount(Client $client, float $amount, ?Sale $sale = null): void
     {
-        $balance = $this->clientBalance($client);
-
         if ($amount <= 0) {
             throw new InvalidArgumentException('Le montant doit être supérieur à zéro.');
         }
+
+        if ($sale) {
+            if ($sale->client_id !== $client->id) {
+                throw new InvalidArgumentException('Ce crédit n\'appartient pas à ce client.');
+            }
+
+            if ($sale->sale_type !== 'legacy_credit') {
+                throw new InvalidArgumentException('Seuls les crédits historiques peuvent recevoir un paiement ciblé.');
+            }
+
+            $due = $this->saleBalanceDue($sale);
+
+            if ($amount > $due + 0.01) {
+                throw new InvalidArgumentException(
+                    "Le montant dépasse le solde dû sur ce crédit ({$due} MAD)."
+                );
+            }
+
+            return;
+        }
+
+        $balance = $this->clientBalance($client);
 
         if ($amount > $balance['sales_balance_due'] + 0.01) {
             throw new InvalidArgumentException(
@@ -369,8 +414,15 @@ class BillingService
         $saleAllocations = $this->fifoStockSaleAllocations($client);
         $paidOnStockSales = round(array_sum($saleAllocations), 2);
 
+        $paidOnCredits = round((float) Payment::query()
+            ->where('client_id', $client->id)
+            ->where('status', 'confirmed')
+            ->whereNotNull('sale_id')
+            ->whereHas('sale', fn ($q) => $q->where('sale_type', 'legacy_credit'))
+            ->sum('amount'), 2);
+
         $salesBalanceDue = round(max(0, $totalStockSales - $paidOnStockSales), 2);
-        $creditsBalanceDue = round($totalCredits, 2);
+        $creditsBalanceDue = round(max(0, $totalCredits - $paidOnCredits), 2);
 
         return [
             'total_invoiced' => round($totalInvoiced, 2),
@@ -424,8 +476,20 @@ class BillingService
         $paidRows = Payment::query()
             ->whereIn('client_id', $ids)
             ->where('status', 'confirmed')
+            ->whereNull('sale_id')
             ->selectRaw('client_id')
-            ->selectRaw('COALESCE(SUM(amount), 0) as total_paid')
+            ->selectRaw('COALESCE(SUM(amount), 0) as total_paid_sales')
+            ->groupBy('client_id')
+            ->get()
+            ->keyBy('client_id');
+
+        $paidCreditRows = Payment::query()
+            ->whereIn('client_id', $ids)
+            ->where('status', 'confirmed')
+            ->whereNotNull('sale_id')
+            ->whereHas('sale', fn ($q) => $q->where('sale_type', 'legacy_credit'))
+            ->selectRaw('client_id')
+            ->selectRaw('COALESCE(SUM(amount), 0) as total_paid_credits')
             ->groupBy('client_id')
             ->get()
             ->keyBy('client_id');
@@ -436,16 +500,19 @@ class BillingService
             $sales = $salesRows->get($id);
             $stockTotal = (float) ($sales->total_stock_sales ?? 0);
             $creditsTotal = (float) ($creditRows->get($id)?->total_credits ?? 0);
-            $paid = (float) ($paidRows->get($id)?->total_paid ?? 0);
+            $paidSales = (float) ($paidRows->get($id)?->total_paid_sales ?? 0);
+            $paidCredits = (float) ($paidCreditRows->get($id)?->total_paid_credits ?? 0);
+            $salesBalanceDue = round(max(0, $stockTotal - $paidSales), 2);
+            $creditsBalanceDue = round(max(0, $creditsTotal - $paidCredits), 2);
 
             $stats[$id] = [
                 'orders_count' => (int) ($sales->orders_count ?? 0),
                 'total_sales' => round($stockTotal + $creditsTotal, 2),
                 'total_stock_sales' => round($stockTotal, 2),
                 'total_credits' => round($creditsTotal, 2),
-                'balance_due' => round(max(0, $stockTotal - $paid) + $creditsTotal, 2),
-                'sales_balance_due' => round(max(0, $stockTotal - $paid), 2),
-                'credits_balance_due' => round($creditsTotal, 2),
+                'balance_due' => round($salesBalanceDue + $creditsBalanceDue, 2),
+                'sales_balance_due' => $salesBalanceDue,
+                'credits_balance_due' => $creditsBalanceDue,
             ];
         }
 

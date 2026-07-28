@@ -254,6 +254,15 @@ class SaleController extends Controller
             'notes' => ['nullable', 'string'],
         ]);
 
+        if (isset($data['total_amount'])) {
+            $paid = $this->billing->creditPaidAmount($sale);
+            if ((float) $data['total_amount'] + 0.01 < $paid) {
+                return response()->json([
+                    'message' => "Le montant total ne peut pas être inférieur au montant déjà payé ({$paid} MAD).",
+                ], 422);
+            }
+        }
+
         $sale = DB::transaction(function () use ($data, $sale) {
             if (isset($data['total_amount'])) {
                 $totalAmount = round((float) $data['total_amount'], 2);
@@ -275,6 +284,8 @@ class SaleController extends Controller
             return $sale->fresh(['client', 'items', 'invoices']);
         });
 
+        $this->billing->syncClientBilling($sale->client);
+
         $this->logger->log(
             $request->user(),
             $request,
@@ -292,6 +303,10 @@ class SaleController extends Controller
     {
         if ($sale->sale_type !== 'legacy_credit') {
             return response()->json(['message' => 'Seules les entrées crédit peuvent être supprimées.'], 422);
+        }
+
+        if ($sale->payments()->exists()) {
+            return response()->json(['message' => 'Impossible de supprimer un crédit qui a des paiements.'], 422);
         }
 
         if ($sale->invoices()->whereHas('payments')->exists()) {

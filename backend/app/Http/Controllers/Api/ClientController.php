@@ -76,13 +76,14 @@ class ClientController extends Controller
 
         $mapSale = function ($sale) use ($saleAllocations) {
             $data = $sale->toArray();
-            $paid = $sale->sale_type === 'legacy_credit'
-                ? 0.0
-                : round((float) ($saleAllocations[$sale->id] ?? 0), 2);
+            $paid = $this->billing->salePaidAmount($sale, $saleAllocations);
             $data['paid_amount'] = $paid;
-            $data['balance_due'] = $sale->sale_type === 'legacy_credit'
-                ? round((float) $sale->total_amount, 2)
-                : round(max(0, (float) $sale->total_amount - $paid), 2);
+            $data['balance_due'] = round(max(0, (float) $sale->total_amount - $paid), 2);
+            $data['payment_status'] = match (true) {
+                $paid <= 0 => 'unpaid',
+                $paid < (float) $sale->total_amount - 0.01 => 'partial',
+                default => 'paid',
+            };
             $data['can_edit'] = false;
             $data['can_delete'] = false;
 
@@ -116,7 +117,7 @@ class ClientController extends Controller
             });
 
         $payments = $client->payments()
-            ->with(['invoice.sale'])
+            ->with(['invoice.sale', 'sale'])
             ->latest('payment_date')
             ->limit(50)
             ->get()

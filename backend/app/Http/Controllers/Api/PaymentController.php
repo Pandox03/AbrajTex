@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Client;
 use App\Models\Payment;
+use App\Models\Sale;
 use App\Services\ActivityLogger;
 use App\Services\AdminNotificationService;
 use App\Services\BillingService;
@@ -26,7 +27,7 @@ class PaymentController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $query = Payment::query()->with(['client', 'invoice.sale']);
+        $query = Payment::query()->with(['client', 'invoice.sale', 'sale']);
 
         if ($search = $request->string('search')->toString()) {
             $query->where(function ($q) use ($search) {
@@ -71,6 +72,7 @@ class PaymentController extends Controller
 
         $data = $request->validate([
             'client_id' => ['required', 'exists:clients,id'],
+            'sale_id' => ['nullable', 'exists:sales,id'],
             'reference' => ['required', 'string', 'max:100', 'unique:payments,reference'],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'payment_date' => ['required', 'date'],
@@ -88,9 +90,14 @@ class PaymentController extends Controller
         ]);
 
         $client = Client::findOrFail($data['client_id']);
+        $sale = null;
+
+        if (! empty($data['sale_id'])) {
+            $sale = Sale::findOrFail($data['sale_id']);
+        }
 
         try {
-            $this->billing->validateClientPaymentAmount($client, (float) $data['amount']);
+            $this->billing->validateClientPaymentAmount($client, (float) $data['amount'], $sale);
         } catch (InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -100,11 +107,11 @@ class PaymentController extends Controller
             $proofPath = $request->file('proof_document')->store('payment-proofs', 'public');
         }
 
-        $payment = DB::transaction(function () use ($data, $request, $client, $proofPath) {
+        $payment = DB::transaction(function () use ($data, $request, $client, $proofPath, $sale) {
             $payment = Payment::create([
                 'client_id' => $client->id,
                 'invoice_id' => null,
-                'sale_id' => null,
+                'sale_id' => $sale?->id,
                 'reference' => $data['reference'],
                 'amount' => $data['amount'],
                 'payment_date' => $data['payment_date'],
@@ -121,16 +128,18 @@ class PaymentController extends Controller
             return $payment;
         });
 
-        $payment->load(['client']);
+        $payment->load(['client', 'sale']);
 
         $this->logger->log(
             $request->user(),
             $request,
             'created',
-            "Paiement enregistré — {$payment->reference} ({$payment->amount} MAD) · {$client->name}",
+            $sale
+                ? "Paiement crédit enregistré — {$payment->reference} ({$payment->amount} MAD) · {$client->name} · {$sale->reference}"
+                : "Paiement enregistré — {$payment->reference} ({$payment->amount} MAD) · {$client->name}",
             'payment',
             $payment->id,
-            ['client' => $client->name, 'amount' => $payment->amount],
+            ['client' => $client->name, 'amount' => $payment->amount, 'sale_id' => $sale?->id],
         );
 
         $this->adminNotifications->notifyPaymentRegistered($payment);
@@ -154,7 +163,7 @@ class PaymentController extends Controller
         $data['proof_document_url'] = $payment->proof_document
             ? url("/api/payments/{$payment->id}/proof")
             : null;
-        $data['auto_allocated'] = $payment->invoice_id === null;
+        $data['auto_allocated'] = $payment->invoice_id === null && $payment->sale_id === null;
 
         return $data;
     }
