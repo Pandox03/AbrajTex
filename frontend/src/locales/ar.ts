@@ -244,7 +244,7 @@ export const ar = {
     amountPaid: 'المدفوع',
     linkedCreditOrSale: 'التخصيص',
     autoAllocationSales: 'المبيعات (FIFO)',
-    deleteCreditConfirm: 'حذف الدين « {ref} »؟',
+    deleteCreditConfirm: 'حذف الدين « {ref} » وجميع مدفوعاته؟',
     deleteCreditError: 'تعذّر حذف هذا الدين.',
     totalInvoiced: 'إجمالي الفواتير',
     totalSales: 'إجمالي المبيعات',

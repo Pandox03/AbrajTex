@@ -244,7 +244,7 @@ export const fr = {
     amountPaid: 'Payé',
     linkedCreditOrSale: 'Affectation',
     autoAllocationSales: 'Ventes (FIFO)',
-    deleteCreditConfirm: 'Supprimer le crédit « {ref} » ?',
+    deleteCreditConfirm: 'Supprimer le crédit « {ref} » et tous ses paiements ?',
     deleteCreditError: 'Impossible de supprimer ce crédit.',
     totalInvoiced: 'Total facturé',
     totalSales: 'Ventes totales',

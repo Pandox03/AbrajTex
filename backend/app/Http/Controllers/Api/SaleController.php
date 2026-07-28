@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\FabricRoll;
 use App\Models\FabricType;
+use App\Models\Payment;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Services\ActivityLogger;
@@ -13,6 +14,7 @@ use App\Services\StockService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
 class SaleController extends Controller
@@ -305,28 +307,43 @@ class SaleController extends Controller
             return response()->json(['message' => 'Seules les entrées crédit peuvent être supprimées.'], 422);
         }
 
-        if ($sale->payments()->exists()) {
-            return response()->json(['message' => 'Impossible de supprimer un crédit qui a des paiements.'], 422);
-        }
-
-        if ($sale->invoices()->whereHas('payments')->exists()) {
-            return response()->json(['message' => 'Impossible de supprimer un crédit dont la facture a des paiements.'], 422);
-        }
-
         $reference = $sale->reference;
         $id = $sale->id;
+        $client = $sale->client;
 
         DB::transaction(function () use ($sale) {
+            $invoiceIds = $sale->invoices()->pluck('id');
+
+            $payments = Payment::query()
+                ->where(function ($q) use ($sale, $invoiceIds) {
+                    $q->where('sale_id', $sale->id);
+                    if ($invoiceIds->isNotEmpty()) {
+                        $q->orWhereIn('invoice_id', $invoiceIds);
+                    }
+                })
+                ->get();
+
+            foreach ($payments as $payment) {
+                if ($payment->proof_document) {
+                    Storage::disk('public')->delete($payment->proof_document);
+                }
+                $payment->delete();
+            }
+
             $sale->invoices()->delete();
             $sale->items()->delete();
             $sale->delete();
         });
 
+        if ($client) {
+            $this->billing->syncClientBilling($client);
+        }
+
         $this->logger->log(
             $request->user(),
             $request,
             'deleted',
-            "Crédit supprimé — {$reference}",
+            "Crédit supprimé avec ses paiements — {$reference}",
             'sale',
             $id,
         );
