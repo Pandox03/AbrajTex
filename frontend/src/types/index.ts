@@ -132,11 +132,13 @@ export interface Sale {
   paid_amount?: string | number
   payment_status?: PaymentStatus
   balance_due?: number
+  can_edit?: boolean
+  can_delete?: boolean
+  invoices_count?: number
   notes?: string | null
   client?: Client
   items?: SaleItem[]
   invoices?: Invoice[]
-  invoices_count?: number
   invoiced_total?: number
   invoiced_subtotal?: number
   remaining_to_invoice?: number
@@ -216,12 +218,18 @@ export interface ClientProfile {
   client: Client
   balance: {
     total_invoiced?: number
+    total_stock_sales?: number
+    total_credits?: number
     total_sales: number
     total_paid: number
+    sales_balance_due: number
+    credits_balance_due: number
     balance_due: number
     orders_count: number
+    credits_count?: number
   }
-  sales: Sale[]
+  stock_sales: Sale[]
+  credits: Sale[]
   payments: Payment[]
   invoices: Invoice[]
 }

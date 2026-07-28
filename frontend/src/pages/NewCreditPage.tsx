@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../lib/api'
 import { useI18n } from '../context/LocaleContext'
 import type { Client } from '../types'
@@ -9,6 +9,8 @@ import PageHeader from '../components/ui/PageHeader'
 export default function NewCreditPage() {
   const { t } = useI18n()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const preselectedClientId = searchParams.get('client_id') ?? ''
   const [clients, setClients] = useState<Client[]>([])
   const [credit, setCredit] = useState({
     reference: `CRD-${Date.now()}`,
@@ -24,10 +26,15 @@ export default function NewCreditPage() {
   useEffect(() => {
     api
       .get<Client[]>('/clients', { params: { lite: 1 } })
-      .then((res) => setClients(res.data))
+      .then((res) => {
+        setClients(res.data)
+        if (preselectedClientId) {
+          setCredit((prev) => ({ ...prev, client_id: preselectedClientId }))
+        }
+      })
       .catch(() => setError(t.credit.loadError))
       .finally(() => setLoadingOptions(false))
-  }, [t.credit.loadError])
+  }, [t.credit.loadError, preselectedClientId])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()

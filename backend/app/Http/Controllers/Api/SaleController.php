@@ -240,4 +240,84 @@ class SaleController extends Controller
 
         return response()->json($sale, 201);
     }
+
+    public function update(Request $request, Sale $sale): JsonResponse
+    {
+        if ($sale->sale_type !== 'legacy_credit') {
+            return response()->json(['message' => 'Seuls les crédits historiques peuvent être modifiés.'], 422);
+        }
+
+        if ($sale->invoices()->exists()) {
+            return response()->json(['message' => 'Impossible de modifier un crédit déjà facturé.'], 422);
+        }
+
+        $data = $request->validate([
+            'reference' => ['sometimes', 'string', 'max:100', 'unique:sales,reference,'.$sale->id],
+            'sale_date' => ['sometimes', 'date'],
+            'total_amount' => ['sometimes', 'numeric', 'min:0.01'],
+            'notes' => ['nullable', 'string'],
+        ]);
+
+        $sale = DB::transaction(function () use ($data, $sale) {
+            if (isset($data['total_amount'])) {
+                $totalAmount = round((float) $data['total_amount'], 2);
+                $data['total_amount'] = $totalAmount;
+
+                $item = $sale->items()->first();
+                if ($item) {
+                    $item->update([
+                        'unit_price' => $totalAmount,
+                        'quantity_m2' => 1,
+                        'line_total' => $totalAmount,
+                    ]);
+                }
+            }
+
+            $sale->update($data);
+
+            return $sale->fresh(['client', 'items']);
+        });
+
+        $this->logger->log(
+            $request->user(),
+            $request,
+            'updated',
+            "Crédit modifié — {$sale->reference}",
+            'sale',
+            $sale->id,
+            ['client' => $sale->client?->name, 'total' => $sale->total_amount],
+        );
+
+        return response()->json($sale);
+    }
+
+    public function destroy(Request $request, Sale $sale): JsonResponse
+    {
+        if ($sale->sale_type !== 'legacy_credit') {
+            return response()->json(['message' => 'Seules les entrées crédit peuvent être supprimées.'], 422);
+        }
+
+        if ($sale->invoices()->exists()) {
+            return response()->json(['message' => 'Impossible de supprimer un crédit déjà facturé.'], 422);
+        }
+
+        $reference = $sale->reference;
+        $id = $sale->id;
+
+        DB::transaction(function () use ($sale) {
+            $sale->items()->delete();
+            $sale->delete();
+        });
+
+        $this->logger->log(
+            $request->user(),
+            $request,
+            'deleted',
+            "Crédit supprimé — {$reference}",
+            'sale',
+            $id,
+        );
+
+        return response()->json(null, 204);
+    }
 }

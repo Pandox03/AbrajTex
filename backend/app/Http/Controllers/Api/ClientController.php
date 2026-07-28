@@ -70,12 +70,48 @@ class ClientController extends Controller
         $client->loadCount('sales', 'payments', 'invoices');
 
         $balance = $this->billing->clientBalance($client);
+        $saleAllocations = $this->billing->fifoStockSaleAllocations($client);
 
-        $sales = $client->sales()
-            ->with(['invoice', 'items'])
+        $mapSale = function ($sale) use ($saleAllocations) {
+            $data = $sale->toArray();
+            $paid = $sale->sale_type === 'legacy_credit'
+                ? 0.0
+                : round((float) ($saleAllocations[$sale->id] ?? 0), 2);
+            $data['paid_amount'] = $paid;
+            $data['balance_due'] = $sale->sale_type === 'legacy_credit'
+                ? round((float) $sale->total_amount, 2)
+                : round(max(0, (float) $sale->total_amount - $paid), 2);
+            $data['can_edit'] = false;
+            $data['can_delete'] = false;
+
+            return $data;
+        };
+
+        $stockSales = $client->sales()
+            ->with(['items'])
+            ->withCount('invoices')
+            ->where(function ($q) {
+                $q->where('sale_type', 'stock')->orWhereNull('sale_type');
+            })
             ->latest('sale_date')
             ->limit(50)
-            ->get();
+            ->get()
+            ->map($mapSale);
+
+        $credits = $client->sales()
+            ->with(['items'])
+            ->withCount('invoices')
+            ->where('sale_type', 'legacy_credit')
+            ->latest('sale_date')
+            ->limit(50)
+            ->get()
+            ->map(function ($sale) use ($mapSale) {
+                $data = $mapSale($sale);
+                $data['can_edit'] = ($sale->invoices_count ?? 0) === 0;
+                $data['can_delete'] = $data['can_edit'];
+
+                return $data;
+            });
 
         $payments = $client->payments()
             ->with(['invoice.sale'])
@@ -106,7 +142,8 @@ class ClientController extends Controller
         return response()->json([
             'client' => $client,
             'balance' => $balance,
-            'sales' => $sales,
+            'stock_sales' => $stockSales,
+            'credits' => $credits,
             'payments' => $payments,
             'invoices' => $invoices,
         ]);

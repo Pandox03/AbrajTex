@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Pencil, Plus } from 'lucide-react'
+import { ArrowLeft, Pencil, Plus, Trash2 } from 'lucide-react'
 import api from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { useI18n } from '../context/LocaleContext'
@@ -9,7 +9,7 @@ import Card from '../components/ui/Card'
 import { InvoiceStatusSelect } from '../components/ui/InvoiceStatusSelect'
 import { InvoiceBadge, PaymentBadge } from '../components/ui/StatusBadge'
 
-type Tab = 'orders' | 'payments' | 'invoices'
+type Tab = 'orders' | 'credits' | 'payments' | 'invoices'
 
 export default function ClientDetailPage() {
   const { id } = useParams()
@@ -48,6 +48,15 @@ export default function ClientDetailPage() {
   })
   const [editError, setEditError] = useState('')
   const [submittingEdit, setSubmittingEdit] = useState(false)
+  const [editingCreditId, setEditingCreditId] = useState<number | null>(null)
+  const [creditForm, setCreditForm] = useState({
+    reference: '',
+    sale_date: '',
+    total_amount: '',
+    notes: '',
+  })
+  const [creditError, setCreditError] = useState('')
+  const [submittingCredit, setSubmittingCredit] = useState(false)
 
   const load = useCallback(() => {
     api.get<ClientProfile>(`/clients/${id}`).then((res) => setProfile(res.data))
@@ -176,15 +185,65 @@ export default function ClientDetailPage() {
     }
   }
 
+  function openCreditEdit(credit: Sale) {
+    setCreditForm({
+      reference: credit.reference,
+      sale_date: credit.sale_date.slice(0, 10),
+      total_amount: String(credit.total_amount),
+      notes: credit.notes ?? '',
+    })
+    setCreditError('')
+    setEditingCreditId(credit.id)
+  }
+
+  async function handleCreditUpdate(e: FormEvent) {
+    e.preventDefault()
+    if (!editingCreditId) return
+
+    setCreditError('')
+    setSubmittingCredit(true)
+
+    try {
+      await api.put(`/sales/${editingCreditId}`, {
+        reference: creditForm.reference,
+        sale_date: creditForm.sale_date,
+        total_amount: Number(creditForm.total_amount),
+        notes: creditForm.notes || null,
+      })
+      setEditingCreditId(null)
+      load()
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      setCreditError(msg ?? t.credit.error)
+    } finally {
+      setSubmittingCredit(false)
+    }
+  }
+
+  async function handleCreditDelete(credit: Sale) {
+    if (!credit.can_delete || !window.confirm(t.clients.deleteCreditConfirm.replace('{ref}', credit.reference))) {
+      return
+    }
+
+    try {
+      await api.delete(`/sales/${credit.id}`)
+      load()
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      window.alert(msg ?? t.clients.deleteCreditError)
+    }
+  }
+
   if (!profile) return <p className="text-muted">{t.common.loading}</p>
 
-  const { client, balance, sales, payments, invoices } = profile
+  const { client, balance, stock_sales, credits, payments, invoices } = profile
 
   const requiresProof = paymentForm.method === 'virement' || paymentForm.method === 'cheque'
-  const canPay = balance.balance_due > 0.01
+  const canPay = balance.sales_balance_due > 0.01
 
   const tabs: { key: Tab; label: string; count: number }[] = [
-    { key: 'orders', label: t.clients.orders, count: sales.length },
+    { key: 'orders', label: t.clients.orders, count: stock_sales.length },
+    { key: 'credits', label: t.nav.credits, count: credits.length },
     { key: 'payments', label: t.clients.payments, count: payments.length },
     { key: 'invoices', label: t.clients.invoices, count: invoices.length },
   ]
@@ -196,8 +255,8 @@ export default function ClientDetailPage() {
         {t.clients.title}
       </Link>
 
-      <div className="mb-6 grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
+      <div className="mb-6 grid gap-4">
+        <Card>
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
             <h1 className="text-2xl font-bold text-navy-900">{client.name}</h1>
             {canEditClient && !showEditForm && (
@@ -283,24 +342,31 @@ export default function ClientDetailPage() {
           )}
         </Card>
 
-        <div className="grid gap-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
-            <p className="text-sm text-muted">{t.clients.totalInvoiced}</p>
-            <p className="text-2xl font-bold text-navy-900">{(balance.total_invoiced ?? balance.total_sales).toLocaleString('fr-FR')} MAD</p>
+            <p className="text-sm text-muted">{t.clients.totalStockSales}</p>
+            <p className="text-xl font-bold text-navy-900">{balance.total_stock_sales?.toLocaleString('fr-FR') ?? 0} MAD</p>
+            <p className="mt-1 text-xs text-muted">{t.clients.salesBalanceDue}: <span className="font-semibold text-red-600">{balance.sales_balance_due.toLocaleString('fr-FR')} MAD</span></p>
           </Card>
           <Card>
-            <p className="text-sm text-muted">{t.clients.balanceDue}</p>
-            <p className="text-2xl font-bold text-red-600">{balance.balance_due.toLocaleString('fr-FR')} MAD</p>
+            <p className="text-sm text-muted">{t.clients.totalCredits}</p>
+            <p className="text-xl font-bold text-amber-700">{balance.total_credits?.toLocaleString('fr-FR') ?? 0} MAD</p>
+            <p className="mt-1 text-xs text-muted">{t.clients.creditsBalanceDue}: <span className="font-semibold text-amber-800">{balance.credits_balance_due.toLocaleString('fr-FR')} MAD</span></p>
           </Card>
           <Card>
             <p className="text-sm text-muted">{t.clients.totalPaid}</p>
-            <p className="text-2xl font-bold text-teal-600">{balance.total_paid.toLocaleString('fr-FR')} MAD</p>
+            <p className="text-xl font-bold text-teal-600">{balance.total_paid.toLocaleString('fr-FR')} MAD</p>
+            <p className="mt-1 text-xs text-muted">{t.clients.paymentsOnSalesOnly}</p>
+          </Card>
+          <Card>
+            <p className="text-sm text-muted">{t.clients.totalBalanceDue}</p>
+            <p className="text-xl font-bold text-red-600">{balance.balance_due.toLocaleString('fr-FR')} MAD</p>
           </Card>
         </div>
       </div>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {tabs.map((tabItem) => (
             <button
               key={tabItem.key}
@@ -312,16 +378,27 @@ export default function ClientDetailPage() {
             </button>
           ))}
         </div>
-        {canRecordPayment && canPay && (
-          <button
-            type="button"
-            onClick={() => setShowPaymentForm(!showPaymentForm)}
-            className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-navy-900 px-4 py-2 text-sm font-semibold text-white"
-          >
-            <Plus size={16} />
-            {t.clients.addPayment}
-          </button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {canEditClient && tab === 'credits' && (
+            <Link
+              to={`/credits/new?client_id=${client.id}`}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-border bg-card px-4 py-2 text-sm font-semibold text-navy-900 hover:bg-surface"
+            >
+              <Plus size={16} />
+              {t.nav.credits}
+            </Link>
+          )}
+          {canRecordPayment && canPay && (
+            <button
+              type="button"
+              onClick={() => setShowPaymentForm(!showPaymentForm)}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-navy-900 px-4 py-2 text-sm font-semibold text-white"
+            >
+              <Plus size={16} />
+              {t.clients.addPayment}
+            </button>
+          )}
+        </div>
       </div>
 
       {canRecordPayment && showPaymentForm && canPay && (
@@ -330,7 +407,7 @@ export default function ClientDetailPage() {
             <div className="rounded-xl border border-teal-200 bg-teal-50/60 px-4 py-3 text-sm">
               <p className="font-medium text-navy-900">{t.clients.paymentFifoHint}</p>
               <p className="mt-1 text-muted">
-                {t.clients.balanceDue}: <strong className="text-red-600">{balance.balance_due.toLocaleString('fr-FR')} MAD</strong>
+                {t.clients.salesBalanceDue}: <strong className="text-red-600">{balance.sales_balance_due.toLocaleString('fr-FR')} MAD</strong>
               </p>
             </div>
 
@@ -350,7 +427,7 @@ export default function ClientDetailPage() {
                   type="number"
                   step="0.01"
                   min={0.01}
-                  max={balance.balance_due}
+                  max={balance.sales_balance_due}
                   value={paymentForm.amount}
                   onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
                   className="h-10 w-full rounded-xl border border-border px-3 text-sm"
@@ -433,20 +510,99 @@ export default function ClientDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {sales.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-muted">{t.clients.noOrders}</td></tr>}
-                {sales.map((sale: Sale) => (
+                {stock_sales.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-muted">{t.clients.noOrders}</td></tr>}
+                {stock_sales.map((sale: Sale) => (
                   <tr key={sale.id} className="border-b border-border/70">
                     <td className="px-3 py-3 font-medium">{sale.reference}</td>
                     <td className="px-3 py-3">{sale.sale_date}</td>
                     <td className="px-3 py-3">{Number(sale.total_amount).toLocaleString('fr-FR')} MAD</td>
                     <td className="px-3 py-3">{sale.payment_status && <PaymentBadge status={sale.payment_status} />}</td>
-                    <td className="px-3 py-3">{(Number(sale.total_amount) - Number(sale.paid_amount ?? 0)).toLocaleString('fr-FR')} MAD</td>
+                    <td className="px-3 py-3">{(sale.balance_due ?? Number(sale.total_amount) - Number(sale.paid_amount ?? 0)).toLocaleString('fr-FR')} MAD</td>
                     <td className="px-3 py-3">{sale.items?.length ?? 0}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+        </Card>
+      )}
+
+      {tab === 'credits' && (
+        <Card>
+          {editingCreditId && (
+            <form onSubmit={handleCreditUpdate} className="mb-6 grid gap-4 border-b border-border pb-6 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium">{t.common.reference}</label>
+                <input value={creditForm.reference} onChange={(e) => setCreditForm({ ...creditForm, reference: e.target.value })} className="w-full rounded-xl border border-border px-4 py-3" required />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">{t.common.date}</label>
+                <input type="date" value={creditForm.sale_date} onChange={(e) => setCreditForm({ ...creditForm, sale_date: e.target.value })} className="w-full rounded-xl border border-border px-4 py-3" required />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">{t.credit.totalAmount}</label>
+                <input type="number" step="0.01" min="0.01" value={creditForm.total_amount} onChange={(e) => setCreditForm({ ...creditForm, total_amount: e.target.value })} className="w-full rounded-xl border border-border px-4 py-3" required />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">{t.common.notes}</label>
+                <input value={creditForm.notes} onChange={(e) => setCreditForm({ ...creditForm, notes: e.target.value })} className="w-full rounded-xl border border-border px-4 py-3" />
+              </div>
+              {creditError && <p className="md:col-span-2 text-sm text-red-600">{creditError}</p>}
+              <div className="flex gap-2 md:col-span-2">
+                <button type="submit" disabled={submittingCredit} className="cursor-pointer rounded-xl bg-teal-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                  {submittingCredit ? t.clients.saving : t.clients.saveChanges}
+                </button>
+                <button type="button" onClick={() => setEditingCreditId(null)} className="cursor-pointer rounded-xl border border-border px-4 py-2 text-sm font-medium hover:bg-surface">
+                  {t.common.cancel}
+                </button>
+              </div>
+            </form>
+          )}
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="border-b border-border text-muted">
+                <tr>
+                  <th className="px-3 py-3">{t.common.reference}</th>
+                  <th className="px-3 py-3">{t.common.date}</th>
+                  <th className="px-3 py-3">{t.common.total}</th>
+                  <th className="px-3 py-3">{t.common.notes}</th>
+                  {canEditClient && <th className="px-3 py-3 text-right">{t.common.actions}</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {credits.length === 0 && (
+                  <tr>
+                    <td colSpan={canEditClient ? 5 : 4} className="px-3 py-8 text-center text-muted">{t.clients.noCredits}</td>
+                  </tr>
+                )}
+                {credits.map((credit: Sale) => (
+                  <tr key={credit.id} className="border-b border-border/70">
+                    <td className="px-3 py-3 font-medium">{credit.reference}</td>
+                    <td className="px-3 py-3">{credit.sale_date}</td>
+                    <td className="px-3 py-3 font-semibold text-amber-700">{Number(credit.total_amount).toLocaleString('fr-FR')} MAD</td>
+                    <td className="px-3 py-3">{credit.notes ?? t.common.dash}</td>
+                    {canEditClient && (
+                      <td className="px-3 py-3 text-right">
+                        <div className="inline-flex gap-2">
+                          {credit.can_edit && (
+                            <button type="button" onClick={() => openCreditEdit(credit)} className="cursor-pointer rounded-lg border border-border p-2 hover:bg-surface" title={t.clients.edit}>
+                              <Pencil size={14} />
+                            </button>
+                          )}
+                          {credit.can_delete && (
+                            <button type="button" onClick={() => handleCreditDelete(credit)} className="cursor-pointer rounded-lg border border-border p-2 text-red-600 hover:bg-red-50" title={t.users.delete}>
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-4 text-xs text-muted">{t.clients.creditsNoPayments}</p>
         </Card>
       )}
 

@@ -15,6 +15,9 @@ class BillingService
     /** @var array<int, array<int, float>> */
     private array $fifoCache = [];
 
+    /** @var array<int, array<int, float>> */
+    private array $fifoSalesCache = [];
+
     /**
      * Split a TTC amount into HT, TVA and TTC (amounts are tax-inclusive).
      *
@@ -66,6 +69,91 @@ class BillingService
             'total' => $breakdown['total'],
             'status' => 'sent',
         ]);
+    }
+
+    /**
+     * Allocate confirmed client payments to stock sales only (FIFO by sale date).
+     * Legacy credits are excluded from payment allocation.
+     *
+     * @return array<int, float> sale_id => allocated amount
+     */
+    public function fifoStockSaleAllocations(Client $client, bool $refresh = false): array
+    {
+        if (! $refresh && isset($this->fifoSalesCache[$client->id])) {
+            return $this->fifoSalesCache[$client->id];
+        }
+
+        $payments = Payment::query()
+            ->where('client_id', $client->id)
+            ->where('status', 'confirmed')
+            ->orderBy('payment_date')
+            ->orderBy('id')
+            ->get();
+
+        $sales = Sale::query()
+            ->where('client_id', $client->id)
+            ->where(function ($q) {
+                $q->where('sale_type', 'stock')->orWhereNull('sale_type');
+            })
+            ->orderBy('sale_date')
+            ->orderBy('id')
+            ->get();
+
+        $allocations = [];
+        $remainingBySale = [];
+
+        foreach ($sales as $sale) {
+            $allocations[$sale->id] = 0.0;
+            $remainingBySale[$sale->id] = (float) $sale->total_amount;
+        }
+
+        foreach ($payments as $payment) {
+            $left = (float) $payment->amount;
+
+            foreach ($sales as $sale) {
+                if ($left <= 0.001) {
+                    break;
+                }
+
+                $canApply = min($left, $remainingBySale[$sale->id]);
+
+                if ($canApply <= 0) {
+                    continue;
+                }
+
+                $allocations[$sale->id] += $canApply;
+                $remainingBySale[$sale->id] -= $canApply;
+                $left -= $canApply;
+            }
+        }
+
+        foreach ($allocations as $saleId => $amount) {
+            $allocations[$saleId] = round($amount, 2);
+        }
+
+        $this->fifoSalesCache[$client->id] = $allocations;
+
+        return $allocations;
+    }
+
+    public function salePaidAmount(Sale $sale, ?array $allocations = null): float
+    {
+        if ($sale->sale_type === 'legacy_credit') {
+            return 0.0;
+        }
+
+        $allocations ??= $this->fifoStockSaleAllocations($sale->client);
+
+        return round((float) ($allocations[$sale->id] ?? 0), 2);
+    }
+
+    public function saleBalanceDue(Sale $sale, ?array $allocations = null): float
+    {
+        if ($sale->sale_type === 'legacy_credit') {
+            return round((float) $sale->total_amount, 2);
+        }
+
+        return round(max(0, (float) $sale->total_amount - $this->salePaidAmount($sale, $allocations)), 2);
     }
 
     /**
@@ -158,20 +246,41 @@ class BillingService
 
     public function syncClientBilling(Client $client): void
     {
-        unset($this->fifoCache[$client->id]);
+        unset($this->fifoCache[$client->id], $this->fifoSalesCache[$client->id]);
 
-        $allocations = $this->fifoInvoiceAllocations($client, true);
+        $invoiceAllocations = $this->fifoInvoiceAllocations($client, true);
+        $saleAllocations = $this->fifoStockSaleAllocations($client, true);
 
         $invoices = Invoice::query()->where('client_id', $client->id)->get();
 
         foreach ($invoices as $invoice) {
-            $this->syncInvoiceStatus($invoice, $allocations);
+            $this->syncInvoiceStatus($invoice, $invoiceAllocations);
         }
 
-        $saleIds = $invoices->pluck('sale_id')->filter()->unique();
+        $sales = Sale::query()->where('client_id', $client->id)->get();
 
-        foreach (Sale::query()->whereIn('id', $saleIds)->get() as $sale) {
-            $this->syncSaleFromInvoices($sale, $allocations);
+        foreach ($sales as $sale) {
+            if ($sale->sale_type === 'legacy_credit') {
+                $sale->update([
+                    'paid_amount' => 0,
+                    'payment_status' => 'unpaid',
+                ]);
+
+                continue;
+            }
+
+            $paid = $this->salePaidAmount($sale, $saleAllocations);
+            $total = (float) $sale->total_amount;
+            $status = match (true) {
+                $paid <= 0 => 'unpaid',
+                $paid < $total - 0.01 => 'partial',
+                default => 'paid',
+            };
+
+            $sale->update([
+                'paid_amount' => $paid,
+                'payment_status' => $status,
+            ]);
         }
     }
 
@@ -226,9 +335,9 @@ class BillingService
             throw new InvalidArgumentException('Le montant doit être supérieur à zéro.');
         }
 
-        if ($amount > $balance['balance_due'] + 0.01) {
+        if ($amount > $balance['sales_balance_due'] + 0.01) {
             throw new InvalidArgumentException(
-                "Le montant dépasse le solde dû du client ({$balance['balance_due']} MAD)."
+                "Le montant dépasse le solde dû sur les ventes ({$balance['sales_balance_due']} MAD)."
             );
         }
     }
@@ -246,14 +355,36 @@ class BillingService
             ->where('client_id', $client->id)
             ->where('status', 'confirmed')
             ->sum('amount');
-        $totalSales = (float) $client->sales()->sum('total_amount');
+
+        $totalStockSales = (float) $client->sales()
+            ->where(function ($q) {
+                $q->where('sale_type', 'stock')->orWhereNull('sale_type');
+            })
+            ->sum('total_amount');
+
+        $totalCredits = (float) $client->sales()
+            ->where('sale_type', 'legacy_credit')
+            ->sum('total_amount');
+
+        $saleAllocations = $this->fifoStockSaleAllocations($client);
+        $paidOnStockSales = round(array_sum($saleAllocations), 2);
+
+        $salesBalanceDue = round(max(0, $totalStockSales - $paidOnStockSales), 2);
+        $creditsBalanceDue = round($totalCredits, 2);
 
         return [
             'total_invoiced' => round($totalInvoiced, 2),
-            'total_sales' => round($totalSales, 2),
+            'total_stock_sales' => round($totalStockSales, 2),
+            'total_credits' => round($totalCredits, 2),
+            'total_sales' => round($totalStockSales + $totalCredits, 2),
             'total_paid' => round($totalPaid, 2),
-            'balance_due' => round(max(0, $totalInvoiced - $totalPaid), 2),
-            'orders_count' => $client->sales()->count(),
+            'sales_balance_due' => $salesBalanceDue,
+            'credits_balance_due' => $creditsBalanceDue,
+            'balance_due' => round($salesBalanceDue + $creditsBalanceDue, 2),
+            'orders_count' => $client->sales()->where(function ($q) {
+                $q->where('sale_type', 'stock')->orWhereNull('sale_type');
+            })->count(),
+            'credits_count' => $client->sales()->where('sale_type', 'legacy_credit')->count(),
         ];
     }
 
@@ -271,17 +402,21 @@ class BillingService
 
         $salesRows = Sale::query()
             ->whereIn('client_id', $ids)
+            ->where(function ($q) {
+                $q->where('sale_type', 'stock')->orWhereNull('sale_type');
+            })
             ->selectRaw('client_id')
             ->selectRaw('COUNT(*) as orders_count')
-            ->selectRaw('COALESCE(SUM(total_amount), 0) as total_sales')
+            ->selectRaw('COALESCE(SUM(total_amount), 0) as total_stock_sales')
             ->groupBy('client_id')
             ->get()
             ->keyBy('client_id');
 
-        $invoiceRows = Invoice::query()
+        $creditRows = Sale::query()
             ->whereIn('client_id', $ids)
+            ->where('sale_type', 'legacy_credit')
             ->selectRaw('client_id')
-            ->selectRaw('COALESCE(SUM(total), 0) as total_invoiced')
+            ->selectRaw('COALESCE(SUM(total_amount), 0) as total_credits')
             ->groupBy('client_id')
             ->get()
             ->keyBy('client_id');
@@ -299,13 +434,18 @@ class BillingService
 
         foreach ($ids as $id) {
             $sales = $salesRows->get($id);
-            $invoiced = (float) ($invoiceRows->get($id)?->total_invoiced ?? 0);
+            $stockTotal = (float) ($sales->total_stock_sales ?? 0);
+            $creditsTotal = (float) ($creditRows->get($id)?->total_credits ?? 0);
             $paid = (float) ($paidRows->get($id)?->total_paid ?? 0);
 
             $stats[$id] = [
                 'orders_count' => (int) ($sales->orders_count ?? 0),
-                'total_sales' => round((float) ($sales->total_sales ?? 0), 2),
-                'balance_due' => round(max(0, $invoiced - $paid), 2),
+                'total_sales' => round($stockTotal + $creditsTotal, 2),
+                'total_stock_sales' => round($stockTotal, 2),
+                'total_credits' => round($creditsTotal, 2),
+                'balance_due' => round(max(0, $stockTotal - $paid) + $creditsTotal, 2),
+                'sales_balance_due' => round(max(0, $stockTotal - $paid), 2),
+                'credits_balance_due' => round($creditsTotal, 2),
             ];
         }
 
